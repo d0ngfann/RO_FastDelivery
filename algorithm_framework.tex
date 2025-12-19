@@ -1,0 +1,524 @@
+\documentclass[a4paper,11pt]{article}
+
+% --- Essential Packages ---
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{setspace}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+
+% --- Settings ---
+\onehalfspacing
+\allowdisplaybreaks
+
+\title{\textbf{Robust Optimization Framework with Endogenous Demand: \\ Exact C\&CG Algorithm Implementation}}
+\author{Advisor \& Student}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Problem Description and Mathematical Formulation}
+\label{sec:formulation}
+
+We address a three-echelon supply chain design problem under demand uncertainty. The problem involves strategic decisions (facility location, mode selection) made before demand realization, and operational decisions (production, flow distribution) made afterward. To ensure robustness against both demand surges (risk of shortage) and demand drops (risk of revenue loss), we propose a \textbf{Two-Stage Robust Optimization} model with a \textbf{Bidirectional Uncertainty Set}, solved via an exact \textbf{Column-and-Constraint Generation (C\&CG)} algorithm.
+
+\subsection{Sets and Indices}
+\begin{itemize}
+    \item $K$: Set of products (index $k$).
+    \item $I$: Set of candidate plants (index $i$).
+    \item $J$: Set of candidate distribution centers (DCs) (index $j$).
+    \item $R$: Set of customers (index $r$).
+    \item $M$: Set of transportation modes (index $m$).
+\end{itemize}
+
+\subsection{Parameters}
+\begin{itemize}
+    \item $S$: Unit selling price (uniform for all products).
+    \item $SC$: Unit shortage cost.
+    \item $MP_{ki}$: Maximum production capacity of plant $i$ for product $k$.
+    \item $MC_{j}$: Maximum throughput capacity of DC $j$.
+    \item $\mu_{rk}$: Nominal demand of customer $r$ for product $k$.
+    \item $\hat{\mu}_{rk}$: Maximum demand deviation for customer $r$ and product $k$.
+    \item $\Gamma_k$: Budget of uncertainty for product $k$ (controls conservatism).
+    \item $DI_{mk}$: Demand increase factor associated with mode $m$ for product $k$.
+    \item $C_{ki}^{plant}$: Fixed cost of opening plant $i$ for product $k$.
+    \item $C_{j}^{dc}$: Fixed cost of opening DC $j$.
+    \item $O_j$: Ordering cost at DC $j$ (incurred per operating period).
+    \item $L_{kij}^1$: Fixed cost of establishing route from plant $i$ to DC $j$ for product $k$.
+    \item $L_{jr}^2$: Fixed cost of establishing route from DC $j$ to customer $r$.
+    \item $F_{ki}$: Unit production cost at plant $i$ for product $k$.
+    \item $h_j$: Unit holding cost at DC $j$.
+    \item $t$: Unit transportation cost (plant to DC).
+    \item $TC_m$: Unit transportation cost coefficient for mode $m$ (DC to customer).
+    \item $D_{kij}^1$: Distance from plant $i$ to DC $j$ for product $k$.
+    \item $D_{jr}^2$: Distance from DC $j$ to customer $r$.
+\end{itemize}
+
+\subsection{Decision Variables}
+
+\subsubsection{First-Stage (Strategic) Variables}
+\begin{itemize}
+    \item $x_i \in \{0,1\}$: 1 if plant $i$ is opened, 0 otherwise.
+    \item $y_j \in \{0,1\}$: 1 if DC $j$ is opened, 0 otherwise.
+    \item $z_{ij} \in \{0,1\}$: 1 if DC $j$ is supplied by plant $i$, 0 otherwise.
+    \item $w_{jr} \in \{0,1\}$: 1 if customer $r$ is served by DC $j$, 0 otherwise.
+    \item $\beta_{rm} \in \{0,1\}$: 1 if customer $r$ is served using mode $m$, 0 otherwise.
+    \item $\alpha_{jrm} \in \{0,1\}$: 1 if mode $m$ is used from DC $j$ to customer $r$, 0 otherwise.
+\end{itemize}
+
+\subsubsection{Second-Stage (Operational) Variables}
+\begin{itemize}
+    \item $A_{ij}^k \ge 0$: Quantity of product $k$ transported from plant $i$ to DC $j$.
+    \item $A_{jr}^k \ge 0$: Quantity of product $k$ transported from DC $j$ to customer $r$.
+    \item $u_{rk} \ge 0$: Shortage quantity of product $k$ for customer $r$.
+\end{itemize}
+
+\subsection{Cost Components}
+
+\subsubsection{Strategic Costs (First-Stage)}
+\begin{align}
+    \text{OC}(\mathbf{y}) &= \sum_{j \in J} O_j y_j \quad \text{(Ordering Cost at DCs)} \\
+    \text{FC}(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}) &= \sum_{k \in K} \sum_{i \in I} C_{ki}^{plant} x_i + \sum_{j \in J} C_{j}^{dc} y_j \notag \\
+    &\quad + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} L_{kij}^1 z_{ij} + \sum_{j \in J} \sum_{r \in R} L_{jr}^2 w_{jr} \quad \text{(Fixed Setup Costs)}
+\end{align}
+
+Note: $\text{OC}$ represents the recurring ordering/operating cost at each DC (incurred per period), while $\text{FC}$ represents one-time fixed costs for opening facilities and establishing routes. These are distinct cost categories and both should be included in the objective function.
+
+\subsubsection{Operational Costs (Second-Stage)}
+\begin{align}
+    \text{HC}(\mathbf{A}) &= \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} \frac{h_j}{2} A_{ij}^k \quad \text{(Holding Cost)} \\
+    \text{TC}(\mathbf{A}, \bm{\alpha}) &= \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} D_{kij}^1 t A_{ij}^k + \sum_{k \in K} \sum_{j \in J} \sum_{r \in R} \sum_{m \in M} D_{jr}^2 TC_m \alpha_{jrm} A_{jr}^k \quad \text{(Transportation Cost)} \\
+    \text{PC}(\mathbf{A}) &= \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} F_{ki} A_{ij}^k \quad \text{(Production Cost)} \\
+    \text{SC}(\mathbf{u}) &= \sum_{r \in R} \sum_{k \in K} SC u_{rk} \quad \text{(Shortage Cost)}
+\end{align}
+
+
+\section{Bidirectional Uncertainty Modeling}
+\label{sec:uncertainty}
+
+Traditional robust models often focus solely on demand surges. However, our approach considers \textbf{bidirectional uncertainty} to capture the trade-off between the cost of shortages (demand increases) and the risk of over-investment and revenue loss (demand decreases).
+
+Let $\eta_{rk}$ be the uncertainty parameter. The realized demand $\tilde{d}_{rk}$ is given by:
+\begin{equation}
+    \tilde{d}_{rk} = \underbrace{\sum_{m \in M} \mu_{rk} DI_{mk} \beta_{rm}}_{\text{Endogenous Nominal Demand}} + \eta_{rk} \hat{\mu}_{rk}
+    \label{eq:realized_demand}
+\end{equation}
+
+The first term represents the base demand adjusted by the delivery mode selection (endogenous), while the second term captures the uncertain deviation.
+
+\subsection{Uncertainty Set Definition}
+
+The uncertainty set $U(\Gamma)$ is defined as:
+\begin{equation}
+    U(\Gamma) = \left\{ \bm{\eta} \in \mathbb{R}^{|R| \times |K|} \;\middle|\; \eta_{rk} \in [-1, 1], \; \sum_{r \in R} |\eta_{rk}| \le \Gamma_k, \; \forall k \in K \right\}
+    \label{eq:uncertainty_set}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\eta_{rk} \in [-1, 1]$ allows for both demand increases ($\eta_{rk} > 0$) and decreases ($\eta_{rk} < 0$).
+    \item $\Gamma_k$ controls the budget of uncertainty: $\Gamma_k = 0$ means no uncertainty, while $\Gamma_k = |R|$ allows all customers to deviate simultaneously.
+    \item Due to the linear structure of the objective function, in the worst-case optimization, $\eta_{rk}$ will naturally take extreme values from the set $\{-1, 0, 1\}$.
+\end{itemize}
+
+\subsection{Binary Decomposition for Linearization}
+
+To facilitate linear optimization in the MILP framework, we decompose $\eta_{rk}$ into two binary variables:
+\begin{align}
+    \eta_{rk} &= \eta_{rk}^+ - \eta_{rk}^- \label{eq:eta_decomp} \\
+    \eta_{rk}^+, \eta_{rk}^- &\in \{0, 1\} \label{eq:eta_binary} \\
+    \eta_{rk}^+ + \eta_{rk}^- &\le 1 \label{eq:eta_mutex}
+\end{align}
+
+where:
+\begin{itemize}
+    \item $\eta_{rk}^+ = 1$ represents a demand increase (worst case for shortage).
+    \item $\eta_{rk}^- = 1$ represents a demand decrease (worst case for revenue loss).
+    \item Constraint \eqref{eq:eta_mutex} ensures mutual exclusivity.
+\end{itemize}
+
+The budget constraint becomes:
+\begin{equation}
+    \sum_{r \in R} \left(\eta_{rk}^+ + \eta_{rk}^-\right) \le \Gamma_k, \quad \forall k \in K
+    \label{eq:budget_binary}
+\end{equation}
+
+\section{Two-Stage Robust Optimization Formulation}
+\label{sec:two_stage}
+
+The complete two-stage robust optimization problem is:
+\begin{equation}
+    \max_{\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}, \bm{\beta}, \bm{\alpha}} \left\{ -\text{OC}(\mathbf{y}) - \text{FC}(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}) + \min_{\bm{\eta} \in U(\Gamma)} Q(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}, \bm{\beta}, \bm{\alpha}; \bm{\eta}) \right\}
+    \label{eq:two_stage_main}
+\end{equation}
+
+where $Q(\cdot)$ is the second-stage operational profit under scenario $\bm{\eta}$:
+\begin{align}
+    Q(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}, \bm{\beta}, \bm{\alpha}; \bm{\eta}) = \max_{\mathbf{A}, \mathbf{u}} \quad & \text{Revenue}(\mathbf{u}, \bm{\eta}) - \text{HC}(\mathbf{A}) - \text{TC}(\mathbf{A}, \bm{\alpha}) \notag \\
+    & - \text{PC}(\mathbf{A}) - \text{SC}(\mathbf{u}) \label{eq:second_stage_obj}
+\end{align}
+
+\subsection{Critical: Correct Revenue Formulation}
+
+\textbf{Revenue is calculated based on actual sales, not shipped quantity:}
+\begin{equation}
+    \text{Revenue}(\mathbf{u}, \bm{\eta}) = \sum_{r \in R} \sum_{k \in K} S \cdot \left(\tilde{d}_{rk}(\bm{\eta}) - u_{rk}\right)
+    \label{eq:revenue_correct}
+\end{equation}
+
+where $\tilde{d}_{rk}(\bm{\eta})$ is the realized demand from Eq. \eqref{eq:realized_demand}.
+
+This formulation ensures:
+\begin{itemize}
+    \item Revenue is generated only from satisfied demand (actual sales).
+    \item Over-supply beyond demand does not generate additional revenue.
+    \item Shortage directly reduces revenue (in addition to the shortage cost penalty).
+\end{itemize}
+
+\section{Exact Solution Algorithm: Column-and-Constraint Generation}
+\label{sec:ccg_algo}
+
+We solve the two-stage robust optimization problem using the Column-and-Constraint Generation (C\&CG) algorithm, which iteratively solves a Master Problem (MP) and a Subproblem (SP) until convergence.
+
+\subsection{Master Problem (MP)}
+
+The MP solves for the optimal strategic decisions considering a subset of critical scenarios $\mathcal{L} = \{\bm{\eta}^{(1)}, \ldots, \bm{\eta}^{(L)}\}$ identified through iterations. We introduce an auxiliary variable $\vartheta$ to represent the worst-case operational profit.
+
+\begin{align}
+    \textbf{[MP]} \quad \max \quad & -\text{OC}(\mathbf{y}) - \text{FC}(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}) + \vartheta \label{eq:mp_obj} \\
+    \text{s.t.} \quad & \textbf{Network Topology Constraints:} \notag \\
+    & \sum_{j \in J} w_{jr} = 1, \quad \forall r \in R \quad \text{(Single sourcing)} \label{eq:mp_single_source} \\
+    & \sum_{m \in M} \alpha_{jrm} = w_{jr}, \quad \forall j \in J, r \in R \quad \text{(Mode selection)} \label{eq:mp_mode} \\
+    & \sum_{j \in J} \alpha_{jrm} = \beta_{rm}, \quad \forall r \in R, m \in M \label{eq:mp_beta} \\
+    & z_{ij} \le x_i, \quad \forall i \in I, j \in J \label{eq:mp_plant_open} \\
+    & z_{ij} \le y_j, \quad \forall i \in I, j \in J \label{eq:mp_dc_open} \\
+    & w_{jr} \le y_j, \quad \forall j \in J, r \in R \label{eq:mp_dc_serve} \\
+    & x_i, y_j, z_{ij}, w_{jr}, \alpha_{jrm}, \beta_{rm} \in \{0, 1\} \notag \\
+    %
+    & \textbf{Robust Optimality Cuts (for each scenario } l \in \mathcal{L}\textbf{):} \notag \\
+    & \vartheta \le \sum_{k \in K} \sum_{r \in R} S \cdot \left(\tilde{d}_{rk}^{(l)} - u_{rk}^{(l)}\right) - \text{HC}^{(l)} - \text{TC}^{(l)} - \text{PC}^{(l)} - \text{SC}^{(l)}, \quad \forall l \in \mathcal{L} \label{eq:mp_cut} \\
+    %
+    & \textbf{Operational Constraints (for each scenario } l \in \mathcal{L}\textbf{):} \notag \\
+    & \sum_{j \in J} A_{ij}^{k(l)} \le MP_{ki}, \quad \forall k \in K, i \in I, l \in \mathcal{L} \label{eq:mp_plant_cap} \\
+    & \sum_{k \in K} \sum_{i \in I} A_{ij}^{k(l)} \le MC_j, \quad \forall j \in J, l \in \mathcal{L} \label{eq:mp_dc_cap} \\
+    & A_{ij}^{k(l)} \le MC_j z_{ij}, \quad \forall k \in K, i \in I, j \in J, l \in \mathcal{L} \label{eq:mp_route_ij} \\
+    & A_{jr}^{k(l)} \le MC_j w_{jr}, \quad \forall k \in K, j \in J, r \in R, l \in \mathcal{L} \label{eq:mp_route_jr} \\
+    & \sum_{j \in J} A_{jr}^{k(l)} + u_{rk}^{(l)} = \tilde{d}_{rk}^{(l)}, \quad \forall k \in K, r \in R, l \in \mathcal{L} \label{eq:mp_demand} \\
+    & \sum_{i \in I} A_{ij}^{k(l)} = \sum_{r \in R} A_{jr}^{k(l)}, \quad \forall k \in K, j \in J, l \in \mathcal{L} \label{eq:mp_balance} \\
+    & A_{ij}^{k(l)}, A_{jr}^{k(l)}, u_{rk}^{(l)} \ge 0, \quad \forall k, i, j, r, l \in \mathcal{L} \notag
+\end{align}
+
+where the realized demand for scenario $l$ is:
+\begin{equation}
+    \tilde{d}_{rk}^{(l)} = \sum_{m \in M} \mu_{rk} DI_{mk} \beta_{rm} + \left(\eta_{rk}^{+(l)} - \eta_{rk}^{-(l)}\right) \hat{\mu}_{rk}
+    \label{eq:mp_realized_demand}
+\end{equation}
+
+also we need linearization for TC in \eqref{eq:mp_cut}
+
+\begin{align*}
+\vartheta 
+&\le 
+\sum_{k \in K} \sum_{r \in R} S \cdot \Bigl(\tilde{d}_{rk}^{(l)} - u_{rk}^{(l)}\Bigr)
+- \mathrm{HC}^{(l)} - \mathrm{PC}^{(l)} - \mathrm{SC}^{(l)} \\
+&\quad
+- \Biggl(
+\sum_{k}\sum_{i}\sum_{j} D_{kij}^{1}\, t\, A_{ij}^{k(l)}
++
+\sum_{k}\sum_{j}\sum_{r}\sum_{m} D_{jr}^{2}\, TC_{m}\, X_{jrm}^{k(l)}
+\Biggr),
+\qquad \forall l \in \mathcal{L} \\[4pt]
+X_{jrm}^{k(l)} 
+&\le M \cdot \alpha_{jrm},
+\qquad \forall k, j, r, m, l \\ 
+X_{jrm}^{k(l)} 
+&\le A_{jr}^{k(l)},
+\qquad \forall k, j, r, m, l \\
+X_{jrm}^{k(l)} 
+&\ge A_{jr}^{k(l)} - M\bigl(1 - \alpha_{jrm}\bigr),
+\qquad \forall k, j, r, m, l \\
+X_{jrm}^{k(l)} 
+&\ge 0,
+\qquad \forall k, j, r, m, l
+\end{align*}
+
+\paragraph{Linearization of Bilinear Terms in MP:}
+The objective function of the Master Problem includes bilinear terms $\alpha_{jrm} \cdot A_{jr}^{k(l)}$ within the transportation cost calculation. We linearize these terms by introducing auxiliary variables $X_{jrm}^{k(l)}$ and the following constraints:
+
+\begin{align}
+    & X_{jrm}^{k(l)} \le M_j \cdot \alpha_{jrm}, \quad \forall k, j, r, m, l \label{eq:mp_lin_1} \\
+    & X_{jrm}^{k(l)} \le A_{jr}^{k(l)}, \quad \forall k, j, r, m, l \label{eq:mp_lin_2} \\
+    & X_{jrm}^{k(l)} \ge A_{jr}^{k(l)} - M_j (1 - \alpha_{jrm}), \quad \forall k, j, r, m, l \label{eq:mp_lin_3} \\
+    & X_{jrm}^{k(l)} \ge 0 \label{eq:mp_lin_4}
+\end{align}
+
+\textbf{Definition of Big-M:} To ensure the tightness of the LP relaxation, we set the Big-M parameter $M_j$ to the capacity of the distribution center:
+\begin{equation}
+    M_j = MC_j
+    \label{eq:big_m_def}
+\end{equation}
+This is a valid upper bound because the flow $A_{jr}^{k(l)}$ through DC $j$ cannot physically exceed its throughput capacity $MC_j$.
+
+
+\textbf{Key Points:}
+\begin{itemize}
+    \item Constraint \eqref{eq:mp_cut}: The optimality cut ensures $\vartheta$ lower-bounds the worst-case operational profit. \textbf{Revenue is correctly calculated as $S \cdot (\text{Demand} - \text{Shortage})$}.
+    \item Constraint \eqref{eq:mp_demand}: Demand satisfaction uses \textbf{equality} to ensure proper balance. Supply plus shortage must exactly equal demand—no over-supply is allowed.
+    \item As iterations progress, more scenarios are added to $\mathcal{L}$, tightening the robust approximation.
+\end{itemize}
+
+\subsection{Subproblem (SP): Worst-Case Scenario Identification}
+
+Given the first-stage solution $(\hat{\mathbf{x}}, \hat{\mathbf{y}}, \hat{\mathbf{z}}, \hat{\mathbf{w}}, \hat{\bm{\beta}}, \hat{\bm{\alpha}})$ from MP, the SP identifies the worst-case demand scenario $\bm{\eta}^*$ that minimizes the operational profit:
+
+\begin{equation}
+    Z_{SP} = \min_{\bm{\eta} \in U(\Gamma)} \max_{\mathbf{A}, \mathbf{u}} \left\{ \text{Revenue}(\mathbf{u}, \bm{\eta}) - \text{HC}(\mathbf{A}) - \text{TC}(\mathbf{A}, \hat{\bm{\alpha}}) - \text{PC}(\mathbf{A}) - \text{SC}(\mathbf{u}) \right\}
+    \label{eq:sp_bilevel}
+\end{equation}
+
+subject to operational constraints \eqref{eq:mp_plant_cap}--\eqref{eq:mp_balance} with fixed first-stage variables.
+
+\subsection{Dual Reformulation and Linearization}
+
+To convert the bi-level problem \eqref{eq:sp_bilevel} into a single-level MILP, we take the dual of the inner maximization problem.
+
+\subsubsection{Dual Variables}
+
+Associate dual variables with operational constraints:
+\begin{itemize}
+    \item $\pi_{ki} \ge 0$: Dual variable for plant capacity constraint \eqref{eq:mp_plant_cap}.
+    \item $\sigma_j \ge 0$: Dual variable for DC capacity constraint \eqref{eq:mp_dc_cap}.
+    \item $\psi_{kij} \ge 0$: Dual variable for plant-DC route constraint \eqref{eq:mp_route_ij}.
+    \item $\phi_{kjr} \ge 0$: Dual variable for DC-customer route constraint \eqref{eq:mp_route_jr}.
+    \item $\gamma_{rk} \in \mathbb{R}$: Dual variable for demand satisfaction constraint \eqref{eq:mp_demand}.
+    \item $\kappa_{kj} \in \mathbb{R}$: Dual variable for flow balance constraint \eqref{eq:mp_balance}.
+\end{itemize}
+
+\subsubsection{Dual Problem (SP-Dual)}
+
+The dual of the inner maximization yields:
+\begin{align}
+    \textbf{[SP-Dual]} \quad Z_{SP} = \min \quad & \sum_{k \in K} \sum_{i \in I} MP_{ki} \pi_{ki} + \sum_{j \in J} MC_j \sigma_j + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} MC_j \hat{z}_{ij} \psi_{kij} \notag \\
+    & + \sum_{k \in K} \sum_{j \in J} \sum_{r \in R} MC_j \hat{w}_{jr} \phi_{kjr} + \sum_{r \in R} \sum_{k \in K} \left(\sum_{m \in M} \mu_{rk} DI_{mk} \hat{\beta}_{rm}\right) \gamma_{rk} \notag \\
+    & + \sum_{r \in R} \sum_{k \in K} \hat{\mu}_{rk} \xi_{rk} \label{eq:sp_dual_obj} \\
+    %
+    \text{s.t.} \quad & \textbf{Dual Feasibility Constraints:} \notag \\
+    & \pi_{ki} + \sigma_j + \psi_{kij} + \kappa_{kj} \ge -\frac{h_j}{2} - D_{kij}^1 t - F_{ki}, \quad \forall k \in K, i \in I, j \in J \label{eq:dual_Aij} \\
+    & \phi_{kjr} + \gamma_{rk} - \kappa_{kj} \ge - \sum_{m \in M} D_{jr}^2 TC_m \hat{\alpha}_{jrm}, \quad \forall k \in K, j \in J, r \in R \label{eq:dual_Ajr} \\
+    & \gamma_{rk} \ge -(S+SC), \quad \forall r \in R, k \in K \label{eq:dual_u} \\
+    & \pi_{ki}, \sigma_j, \psi_{kij}, \phi_{kjr} \ge 0, \quad \gamma_{rk}, \kappa_{kj} \in \mathbb{R} \label{eq:dual_feasibility} \\
+    %
+    & \textbf{Uncertainty Set Constraints:} \notag \\
+    & \sum_{r \in R} \left(\eta_{rk}^+ + \eta_{rk}^-\right) \le \Gamma_k, \quad \forall k \in K \label{eq:sp_budget} \\
+    & \eta_{rk}^+, \eta_{rk}^- \in \{0, 1\}, \quad \eta_{rk}^+ + \eta_{rk}^- \le 1, \quad \forall r \in R, k \in K \label{eq:sp_binary} \\
+    %
+    & \textbf{McCormick Linearization for } \xi_{rk} = \left(\eta_{rk}^+ - \eta_{rk}^-\right) \gamma_{rk}\textbf{:} \notag
+\end{align}
+
+\subsubsection{Proper McCormick Linearization}
+
+The objective function \eqref{eq:sp_dual_obj} contains the bilinear term $\xi_{rk} = \left(\eta_{rk}^+ - \eta_{rk}^-\right) \gamma_{rk}$.
+Direct linearization of this difference term can lead to loose bounds. Therefore, we decompose it into two separate bilinear terms using auxiliary variables $p_{rk}^+$ and $p_{rk}^-$:
+
+\begin{equation}
+    \xi_{rk} = p_{rk}^+ - p_{rk}^- \label{eq:xi_decomposition}
+\end{equation}
+
+where $p_{rk}^+ \approx \eta_{rk}^+ \gamma_{rk}$ and $p_{rk}^- \approx \eta_{rk}^- \gamma_{rk}$.
+
+Using the bounds $\gamma^L = -(S + SC)$ and $\gamma^U = S$, we apply McCormick envelopes to each term separately.
+
+\paragraph{Constraints for $p_{rk}^+ = \eta_{rk}^+ \gamma_{rk}$:}
+\begin{align}
+    p_{rk}^+ &\ge \gamma^L \eta_{rk}^+ \label{eq:mccormick_p_plus_1} \\
+    p_{rk}^+ &\le \gamma^U \eta_{rk}^+ \label{eq:mccormick_p_plus_2} \\
+    p_{rk}^+ &\ge \gamma_{rk} - \gamma^U (1 - \eta_{rk}^+) \label{eq:mccormick_p_plus_3} \\
+    p_{rk}^+ &\le \gamma_{rk} - \gamma^L (1 - \eta_{rk}^+) \label{eq:mccormick_p_plus_4}
+\end{align}
+
+\paragraph{Constraints for $p_{rk}^- = \eta_{rk}^- \gamma_{rk}$:}
+\begin{align}
+    p_{rk}^- &\ge \gamma^L \eta_{rk}^- \label{eq:mccormick_p_minus_1} \\
+    p_{rk}^- &\le \gamma^U \eta_{rk}^- \label{eq:mccormick_p_minus_2} \\
+    p_{rk}^- &\ge \gamma_{rk} - \gamma^U (1 - \eta_{rk}^-) \label{eq:mccormick_p_minus_3} \\
+    p_{rk}^- &\le \gamma_{rk} - \gamma^L (1 - \eta_{rk}^-) \label{eq:mccormick_p_minus_4}
+\end{align}
+
+This decomposition ensures that if $\eta_{rk}^+ = 1$ (and thus $\eta_{rk}^- = 0$), then $p_{rk}^+ = \gamma_{rk}$ and $p_{rk}^- = 0$, strictly enforcing $\xi_{rk} = \gamma_{rk}$.
+
+\begin{align}
+    \gamma^L &= -(S + SC) \quad \text{(Derived from dual constraint on } u_{rk}\text{)} \label{eq:gamma_lower} \\
+    \gamma^U &= S \quad \text{(Derived from economic interpretation)} \label{eq:gamma_upper}
+\end{align}
+
+\paragraph{Justification for Upper Bound $\gamma^U$:}
+Although $\gamma_{rk}$ corresponds to an equality constraint (Eq. \ref{eq:mp_demand}) and is theoretically unrestricted in sign, it represents the \textit{marginal value} (shadow price) of an additional unit of demand for customer $r$.
+Since the maximum revenue generated by satisfying one unit of demand is the selling price $S$[cite: 7], and all operational costs are non-negative, the marginal profit contribution of an additional unit of demand cannot exceed $S$. Therefore, $\gamma_{rk} \le S$ is a valid inequality that tightens the formulation without cutting off any optimal solutions.
+
+
+\textbf{Critical Note:} Using proper bounds $\gamma^L = -(S+SC)$ and $\gamma^U = S$ (instead of generic big-M values) results in:
+\begin{itemize}
+    \item Tighter LP relaxation
+    \item Better numerical stability
+    \item Faster convergence of the C\&CG algorithm
+\end{itemize}
+
+
+
+\subsection{Complete Subproblem Formulation}
+
+The complete subproblem is a MILP:
+\begin{align}
+    \textbf{[SP-Complete]} \quad Z_{SP} = \min \quad & \text{Objective \eqref{eq:sp_dual_obj}} \\
+    \text{s.t.} \quad & \text{Constraints \eqref{eq:dual_Aij}--\eqref{eq:dual_feasibility}} \quad \text{(Dual feasibility)} \notag \\
+    & \text{Constraints \eqref{eq:sp_budget}--\eqref{eq:sp_binary}} \quad \text{(Uncertainty set)} \notag \\
+    & \text{Constraints \eqref{eq:mccormick_p_plus_1}--\eqref{eq:mccormick_p_minus_4}} \quad \text{(McCormick linearization)} \notag
+\end{align}
+
+\subsection{C\&CG Algorithm Procedure}
+
+\begin{algorithm}[H]
+\caption{Exact Column-and-Constraint Generation (C\&CG) for Bidirectional Robust Optimization}
+\label{alg:ccg_exact}
+\begin{algorithmic}[1]
+\State \textbf{Initialize:}
+    \State Set lower bound $LB = -\infty$ and upper bound $UB = +\infty$.
+    \State Set convergence tolerance $\epsilon = 10^{-4}$.
+    \State Set scenario set $\mathcal{L} = \{\mathbf{0}\}$ (nominal scenario: $\bm{\eta}^{(0)} = \mathbf{0}$).
+    \State Set iteration counter $iter = 0$.
+
+\While{$(UB - LB) > \epsilon$}
+    \State $iter \leftarrow iter + 1$
+    
+    \State \textbf{Step 1: Solve Master Problem (MP)}
+    \State Solve \textbf{[MP]} with constraints corresponding to all scenarios in $\mathcal{L}$.
+    \State Obtain optimal first-stage solution $(\hat{\mathbf{x}}, \hat{\mathbf{y}}, \hat{\mathbf{z}}, \hat{\mathbf{w}}, \hat{\bm{\beta}}, \hat{\bm{\alpha}})$.
+    \State Obtain optimal second-stage solutions $\{\mathbf{A}^{(l)}, \mathbf{u}^{(l)}\}_{l \in \mathcal{L}}$ and auxiliary variable $\vartheta^*$.
+    \State Update upper bound: $UB = -\text{OC}(\hat{\mathbf{y}}) - \text{FC}(\hat{\mathbf{x}}, \hat{\mathbf{y}}, \hat{\mathbf{z}}, \hat{\mathbf{w}}) + \vartheta^*$.
+    
+    \State \textbf{Step 2: Solve Subproblem (SP)}
+    \State Fix first-stage variables to $(\hat{\mathbf{x}}, \hat{\mathbf{y}}, \hat{\mathbf{z}}, \hat{\mathbf{w}}, \hat{\bm{\beta}}, \hat{\bm{\alpha}})$.
+    \State Solve \textbf{[SP-Complete]} to optimality.
+    \State Identify worst-case scenario $\bm{\eta}^{*(iter)}$ (i.e., $\{\eta_{rk}^{+*}, \eta_{rk}^{-*}\}_{r,k}$).
+    \State Obtain optimal dual objective value $Z_{SP}^*$.
+    \State Calculate true robust profit: $Z_{Current} = -\text{OC}(\hat{\mathbf{y}}) - \text{FC}(\hat{\mathbf{x}}, \hat{\mathbf{y}}, \hat{\mathbf{z}}, \hat{\mathbf{w}}) + Z_{SP}^*$.
+    \State Update lower bound: $LB = \max(LB, Z_{Current})$.
+    
+    \State \textbf{Step 3: Convergence Check \& Cut Generation}
+    \If{$(UB - LB) \le \epsilon$}
+        \State \textbf{Terminate.} The optimal robust solution has been found.
+    \Else
+        \State Add the identified worst-case scenario $\bm{\eta}^{*(iter)}$ to scenario set: $\mathcal{L} \leftarrow \mathcal{L} \cup \{\bm{\eta}^{*(iter)}\}$.
+        \State \textbf{Add to MP:}
+        \State \quad - New second-stage variables: $A_{ij}^{k(iter)}, A_{jr}^{k(iter)}, u_{rk}^{(iter)}$ for all $k, i, j, r$.
+        \State \quad - New operational constraints \eqref{eq:mp_plant_cap}--\eqref{eq:mp_balance} for scenario $iter$.
+        \State \quad - New optimality cut \eqref{eq:mp_cut} for scenario $iter$.
+    \EndIf
+\EndWhile
+
+\State \textbf{Return:}
+\State \quad - Optimal strategic plan: $(\hat{\mathbf{x}}^*, \hat{\mathbf{y}}^*, \hat{\mathbf{z}}^*, \hat{\mathbf{w}}^*, \hat{\bm{\beta}}^*, \hat{\bm{\alpha}}^*)$.
+\State \quad - Robust objective value: $Z^* = LB$.
+\State \quad - Critical scenario set: $\mathcal{L}$.
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Convergence Properties}
+
+The C\&CG algorithm has the following properties:
+\begin{itemize}
+    \item \textbf{Finite Convergence:} The algorithm converges in a finite number of iterations because:
+    \begin{itemize}
+        \item The uncertainty set is finite (due to binary decomposition of $\eta_{rk}$).
+        \item Each iteration adds at least one new scenario to $\mathcal{L}$.
+        \item No scenario is added twice (each $\bm{\eta}$ is unique).
+    \end{itemize}
+    \item \textbf{Global Optimality:} Upon convergence, the solution is guaranteed to be globally optimal for the two-stage robust optimization problem.
+    \item \textbf{Monotonicity:} The bounds satisfy:
+    \begin{itemize}
+        \item Lower bound $LB$ is non-decreasing: $LB^{(iter+1)} \ge LB^{(iter)}$.
+        \item Upper bound $UB$ is non-increasing: $UB^{(iter+1)} \le UB^{(iter)}$.
+    \end{itemize}
+\end{itemize}
+
+\section{Computational Complexity}
+
+\subsection{Problem Size}
+
+The complete formulation has the following dimensions:
+\begin{itemize}
+    \item First-stage binary variables: $|I| + |J| + |I| \times |J| + |J| \times |R| + |R| \times |M| + |J| \times |R| \times |M|$
+    \item Second-stage variables per scenario: $|K| \times |I| \times |J| + |K| \times |J| \times |R| + |K| \times |R|$
+    \item Constraints per scenario: $O(|K| \times |I| \times |J| \times |R|)$
+\end{itemize}
+
+For the baseline problem size ($|K|=3$, $|I|=5$, $|J|=20$, $|R|=100$, $|M|=3$):
+\begin{itemize}
+    \item First-stage binary variables: $\approx 6,000$
+    \item Second-stage continuous variables per scenario: $\approx 6,300$
+    \item At convergence with $|\mathcal{L}| = L$ scenarios: $6,000 + 6,300L$ total variables
+\end{itemize}
+
+\subsection{Advantages of C\&CG Decomposition}
+
+\begin{enumerate}
+    \item \textbf{Scenario Generation on Demand:} Only critical scenarios are included, avoiding the exponential enumeration of all possible scenarios.
+    \item \textbf{Separation of Concerns:} 
+    \begin{itemize}
+        \item MP focuses on finding the best strategic decisions given known worst-case scenarios.
+        \item SP focuses on identifying new worst-case scenarios given fixed strategic decisions.
+    \end{itemize}
+    \item \textbf{Scalability:} The algorithm typically converges with $|\mathcal{L}| \ll 2^{|R| \times |K|}$ scenarios.
+\end{enumerate}
+
+\section{Comparison with Heuristic Approach}
+
+The original \texttt{main.tex} proposed a hybrid approach combining an Adaptive Memetic Algorithm (AMA) with C\&CG as a subproblem evaluator. The current formulation offers the following improvements:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Aspect} & \textbf{AMA + C\&CG Subproblem} & \textbf{Pure C\&CG (This Work)} \\
+\midrule
+Solution Quality & Heuristic (no guarantee) & Globally optimal \\
+Convergence & Time-limited (2 hours) & Proven finite convergence \\
+Optimality Gap & Unknown & Guaranteed $< \epsilon$ \\
+Scalability & Better for very large instances & Limited by MILP solver \\
+Implementation & Complex (hybrid) & Standard (MILP solver) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Recommendation:} 
+\begin{itemize}
+    \item Use pure C\&CG for instances where global optimality is critical and problem size is moderate.
+    \item Use AMA + C\&CG hybrid for very large instances where global optimality can be sacrificed for computational tractability.
+\end{itemize}
+
+\section{Conclusion}
+
+This document presents a rigorous mathematical formulation and exact solution algorithm for a two-stage robust supply chain optimization problem with:
+\begin{enumerate}
+    \item \textbf{Endogenous demand:} Transportation mode selection influences customer demand through delivery speed.
+    \item \textbf{Bidirectional uncertainty:} Both demand surges (shortage risk) and demand drops (revenue loss) are considered.
+    \item \textbf{Correct revenue accounting:} Revenue is calculated from actual sales, preventing artificial over-supply incentives.
+    \item \textbf{Proper McCormick linearization:} Tight bounds ensure numerical stability and fast convergence.
+\end{enumerate}
+
+The proposed C\&CG algorithm provides:
+\begin{itemize}
+    \item Guaranteed global optimality
+    \item Finite convergence
+    \item Efficient scenario generation (only critical scenarios included)
+\end{itemize}
+
+This formulation corrects all critical mathematical errors identified in the original approach and fully incorporates the improvements specified in \texttt{new\_approach.tex}.
+
+\end{document}
