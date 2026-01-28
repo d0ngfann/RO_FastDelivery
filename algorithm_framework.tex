@@ -64,13 +64,15 @@ We address a three-echelon supply chain design problem under demand uncertainty.
 
 \subsubsection{First-Stage (Strategic) Variables}
 \begin{itemize}
-    \item $x_i \in \{0,1\}$: 1 if plant $i$ is opened, 0 otherwise.
-    \item $y_j \in \{0,1\}$: 1 if DC $j$ is opened, 0 otherwise.
-    \item $z_{ij} \in \{0,1\}$: 1 if DC $j$ is supplied by plant $i$, 0 otherwise.
+    \item $x_{ki} \in \{0,1\}$: 1 if plant $i$ is opened for product $k$, 0 otherwise. \textbf{(Product-specific plants)}
+    \item $y_j \in \{0,1\}$: 1 if DC $j$ is opened, 0 otherwise. \textbf{(Shared across all products)}
+    \item $z_{kij} \in \{0,1\}$: 1 if product $k$ flows from plant $i$ to DC $j$, 0 otherwise. \textbf{(Product-specific routes)}
     \item $w_{jr} \in \{0,1\}$: 1 if customer $r$ is served by DC $j$, 0 otherwise.
     \item $\beta_{rm} \in \{0,1\}$: 1 if customer $r$ is served using mode $m$, 0 otherwise.
     \item $\alpha_{jrm} \in \{0,1\}$: 1 if mode $m$ is used from DC $j$ to customer $r$, 0 otherwise.
 \end{itemize}
+
+\textbf{Important:} Each product $k$ has its own set of candidate plants (index $i$), meaning there are $|K| \times |I|$ potential plant facilities. Each product requires at least one dedicated plant. DCs are shared resources that can handle multiple products.
 
 \subsubsection{Second-Stage (Operational) Variables}
 \begin{itemize}
@@ -84,8 +86,8 @@ We address a three-echelon supply chain design problem under demand uncertainty.
 \subsubsection{Strategic Costs (First-Stage)}
 \begin{align}
     \text{OC}(\mathbf{y}) &= \sum_{j \in J} O_j y_j \quad \text{(Ordering Cost at DCs)} \\
-    \text{FC}(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}) &= \sum_{k \in K} \sum_{i \in I} C_{ki}^{plant} x_i + \sum_{j \in J} C_{j}^{dc} y_j \notag \\
-    &\quad + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} L_{kij}^1 z_{ij} + \sum_{j \in J} \sum_{r \in R} L_{jr}^2 w_{jr} \quad \text{(Fixed Setup Costs)}
+    \text{FC}(\mathbf{x}, \mathbf{y}, \mathbf{z}, \mathbf{w}) &= \sum_{k \in K} \sum_{i \in I} C_{ki}^{plant} x_{ki} + \sum_{j \in J} C_{j}^{dc} y_j \notag \\
+    &\quad + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} L_{kij}^1 z_{kij} + \sum_{j \in J} \sum_{r \in R} L_{jr}^2 w_{jr} \quad \text{(Fixed Setup Costs)}
 \end{align}
 
 Note: $\text{OC}$ represents the recurring ordering/operating cost at each DC (incurred per period), while $\text{FC}$ represents one-time fixed costs for opening facilities and establishing routes. These are distinct cost categories and both should be included in the objective function.
@@ -196,10 +198,11 @@ The MP solves for the optimal strategic decisions considering a subset of critic
     & \sum_{j \in J} w_{jr} = 1, \quad \forall r \in R \quad \text{(Single sourcing)} \label{eq:mp_single_source} \\
     & \sum_{m \in M} \alpha_{jrm} = w_{jr}, \quad \forall j \in J, r \in R \quad \text{(Mode selection)} \label{eq:mp_mode} \\
     & \sum_{j \in J} \alpha_{jrm} = \beta_{rm}, \quad \forall r \in R, m \in M \label{eq:mp_beta} \\
-    & z_{ij} \le x_i, \quad \forall i \in I, j \in J \label{eq:mp_plant_open} \\
-    & z_{ij} \le y_j, \quad \forall i \in I, j \in J \label{eq:mp_dc_open} \\
+    & \sum_{i \in I} x_{ki} \ge 1, \quad \forall k \in K \quad \text{(Each product requires at least one plant)} \label{eq:mp_product_plant} \\
+    & z_{kij} \le x_{ki}, \quad \forall k \in K, i \in I, j \in J \quad \text{(Product-specific plant opening)} \label{eq:mp_plant_open} \\
+    & z_{kij} \le y_j, \quad \forall k \in K, i \in I, j \in J \quad \text{(DC opening for product routes)} \label{eq:mp_dc_open} \\
     & w_{jr} \le y_j, \quad \forall j \in J, r \in R \label{eq:mp_dc_serve} \\
-    & x_i, y_j, z_{ij}, w_{jr}, \alpha_{jrm}, \beta_{rm} \in \{0, 1\} \notag \\
+    & x_{ki}, y_j, z_{kij}, w_{jr}, \alpha_{jrm}, \beta_{rm} \in \{0, 1\} \notag \\
     %
     & \textbf{Robust Optimality Cuts (for each scenario } l \in \mathcal{L}\textbf{):} \notag \\
     & \vartheta \le \sum_{k \in K} \sum_{r \in R} S \cdot \left(\tilde{d}_{rk}^{(l)} - u_{rk}^{(l)}\right) - \text{HC}^{(l)} - \text{TC}^{(l)} - \text{PC}^{(l)} - \text{SC}^{(l)}, \quad \forall l \in \mathcal{L} \label{eq:mp_cut} \\
@@ -207,7 +210,7 @@ The MP solves for the optimal strategic decisions considering a subset of critic
     & \textbf{Operational Constraints (for each scenario } l \in \mathcal{L}\textbf{):} \notag \\
     & \sum_{j \in J} A_{ij}^{k(l)} \le MP_{ki}, \quad \forall k \in K, i \in I, l \in \mathcal{L} \label{eq:mp_plant_cap} \\
     & \sum_{k \in K} \sum_{i \in I} A_{ij}^{k(l)} \le MC_j, \quad \forall j \in J, l \in \mathcal{L} \label{eq:mp_dc_cap} \\
-    & A_{ij}^{k(l)} \le MC_j z_{ij}, \quad \forall k \in K, i \in I, j \in J, l \in \mathcal{L} \label{eq:mp_route_ij} \\
+    & A_{ij}^{k(l)} \le MC_j z_{kij}, \quad \forall k \in K, i \in I, j \in J, l \in \mathcal{L} \quad \text{(Product-specific route)} \label{eq:mp_route_ij} \\
     & A_{jr}^{k(l)} \le MC_j w_{jr}, \quad \forall k \in K, j \in J, r \in R, l \in \mathcal{L} \label{eq:mp_route_jr} \\
     & \sum_{j \in J} A_{jr}^{k(l)} + u_{rk}^{(l)} = \tilde{d}_{rk}^{(l)}, \quad \forall k \in K, r \in R, l \in \mathcal{L} \label{eq:mp_demand} \\
     & \sum_{i \in I} A_{ij}^{k(l)} = \sum_{r \in R} A_{jr}^{k(l)}, \quad \forall k \in K, j \in J, l \in \mathcal{L} \label{eq:mp_balance} \\
@@ -304,7 +307,7 @@ Associate dual variables with operational constraints:
 
 The dual of the inner maximization yields:
 \begin{align}
-    \textbf{[SP-Dual]} \quad Z_{SP} = \min \quad & \sum_{k \in K} \sum_{i \in I} MP_{ki} \pi_{ki} + \sum_{j \in J} MC_j \sigma_j + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} MC_j \hat{z}_{ij} \psi_{kij} \notag \\
+    \textbf{[SP-Dual]} \quad Z_{SP} = \min \quad & \sum_{k \in K} \sum_{i \in I} MP_{ki} \pi_{ki} + \sum_{j \in J} MC_j \sigma_j + \sum_{k \in K} \sum_{i \in I} \sum_{j \in J} MC_j \hat{z}_{kij} \psi_{kij} \notag \\
     & + \sum_{k \in K} \sum_{j \in J} \sum_{r \in R} MC_j \hat{w}_{jr} \phi_{kjr} + \sum_{r \in R} \sum_{k \in K} \left(\sum_{m \in M} \mu_{rk} DI_{mk} \hat{\beta}_{rm}\right) \gamma_{rk} \notag \\
     & + \sum_{r \in R} \sum_{k \in K} \hat{\mu}_{rk} \xi_{rk} \label{eq:sp_dual_obj} \\
     %

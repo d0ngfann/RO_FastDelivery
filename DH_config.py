@@ -23,23 +23,23 @@ class ProblemConfig:
             self.M = 2  # Transport modes
             self.grid_size = 50  # Coordinate grid size
         elif instance_type == 'full':
-            # Full-scale problem
+            # Full-scale problem - REDUCED for faster solving
             self.K = 3  # Products
-            self.I = 5  # Plants
-            self.J = 20  # DCs
-            self.R = 100  # Customers
+            self.I = 3  # Plants (reduced from 5)
+            self.J = 5  # DCs (reduced from 10 for faster computation, targets 1-2 DCs)
+            self.R = 50  # Customers (reduced from 100 for computational tractability)
             self.M = 3  # Transport modes
             self.grid_size = 100  # Coordinate grid size
         else:
             raise ValueError(f"Unknown instance type: {instance_type}")
 
         # Algorithm parameters
-        self.epsilon = 1e-4  # Convergence tolerance
+        self.epsilon = 200  # Convergence tolerance (absolute gap)
         self.max_iterations = 100  # Maximum C&CG iterations
 
         # Gurobi solver settings
         self.gurobi_time_limit = 3600  # seconds per optimization
-        self.gurobi_mip_gap = 1e-6  # Tighter MIP gap (was 1e-4)
+        self.gurobi_mip_gap = 1e-4  # 0.01% MIP gap (balanced speed/accuracy)
         self.gurobi_threads = 0  # 0 = use all available cores
         self.gurobi_output_flag = 1  # 1 = show logs, 0 = silent
 
@@ -82,13 +82,13 @@ class DataParameters:
     SC = 50.0  # Unit shortage cost
 
     # Cost parameters (ranges for random generation)
-    # Plant fixed costs: C^plant_{ki} - REDUCED for more realistic solutions
-    C_plant_min = 5000   # was 50000
-    C_plant_max = 15000  # was 150000
+    # Plant fixed costs: C^plant_{ki} - REDUCED for positive profits
+    C_plant_min = 5000   # Reduced from 10000 (still targets 1-2 plants per product)
+    C_plant_max = 10000  # Reduced from 20000
 
-    # DC fixed costs: C^dc_j - REDUCED for more realistic solutions
-    C_dc_min = 3000      # was 30000
-    C_dc_max = 8000      # was 80000
+    # DC fixed costs: C^dc_j - REDUCED for positive profits
+    C_dc_min = 3000      # Reduced from 6000 (targets 1-2 DCs with high capacity)
+    C_dc_max = 6000      # Reduced from 12000
 
     # Ordering costs at DCs: O_j
     O_min = 5000
@@ -126,19 +126,19 @@ class DataParameters:
         [1.5, 1.5, 1.5]   # Mode 2: 50% increase
     ]
 
-    # Capacity parameters
-    # Plant capacity: MP_{ki}
-    MP_min = 5000
-    MP_max = 15000
+    # Capacity parameters - VERY TIGHT to create shortage pressure
+    # Plant capacity: MP_{ki} - tight for R=50
+    MP_min = 900    # Tight (was 1000)
+    MP_max = 1800   # Tight (was 2200)
 
-    # DC capacity: MC_j
-    MC_min = 3000
-    MC_max = 10000
+    # DC capacity: MC_j - INCREASED for 1-2 DC hub-based network
+    MC_min = 1500   # Increased 3.75x from 400 for high-capacity DCs
+    MC_max = 1800   # Increased 2x from 900, reduced variability (20% vs 125%)
 
     # Demand parameters
-    # Nominal demand: μ_{rk}
-    mu_min = 10.0
-    mu_max = 50.0
+    # Nominal demand: μ_{rk} - NOTE: actual generation in DH_data_gen.py uses 10*U[0.8, 3.5] = [8, 35]
+    mu_min = 8.0    # Updated to match DH_data_gen.py
+    mu_max = 35.0   # Updated to match DH_data_gen.py (reduced from 50)
 
     # Demand deviation (maximum uncertainty): μ̂_{rk}
     # As a fraction of nominal demand

@@ -1,13 +1,14 @@
 """
 DH_main.py
+
 Main execution script for the C&CG robust optimization algorithm.
 Runs sensitivity analysis over different uncertainty budget (Gamma) values.
 """
 
 """
-  # Seed 5, Mixed scenario, Gamma=20                                                                                                                                           
-  python3 DH_main.py full 20 --seed 5 --di Mixed    
-"""      
+  # Seed 5, Mixed scenario, Gamma=10
+  python3 DH_main.py full 10 --seed 5 --di Mixed
+"""
 
 import os
 import sys
@@ -31,7 +32,7 @@ def run_single_gamma(data, config, gamma):
         gamma: Uncertainty budget value
 
     Returns:
-        dict: Results from C&CG algorithm
+        dict: Results from C&CG algorithm (with added facility information)
     """
     print("\n" + "=" * 80)
     print(f"RUNNING C&CG FOR Γ = {gamma}")
@@ -40,13 +41,43 @@ def run_single_gamma(data, config, gamma):
     # Set gamma
     config.set_gamma(gamma)
 
+    # Record start time
+    start_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     # Create and run C&CG algorithm
     ccg = CCGAlgorithm(data, config)
     results = ccg.run()
 
-    # Print solution summary
+    # Record end time
+    end_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Add timing information
+    results['start_time'] = start_time_str
+    results['end_time'] = end_time_str
+
+    # Extract opened facilities information
     if results['optimal_solution'] is not None:
+        solution = results['optimal_solution']
+        # Product-specific plants
+        opened_plants_by_product = {}
+        for k in range(data.K):
+            opened_plants_k = [i for i in range(data.I) if solution['x'][(k, i)] > 0.5]
+            opened_plants_by_product[k] = opened_plants_k
+
+        opened_dcs = [j for j in range(data.J) if solution['y'][j] > 0.5]
+
+        results['opened_plants_by_product'] = opened_plants_by_product
+        results['opened_plants'] = opened_plants_by_product  # For backward compatibility
+        results['opened_dcs'] = opened_dcs
+        results['num_plants_opened'] = sum(len(v) for v in opened_plants_by_product.values())
+        results['num_dcs_opened'] = len(opened_dcs)
+
         print_solution_summary(results['optimal_solution'], data)
+    else:
+        results['opened_plants'] = []
+        results['opened_dcs'] = []
+        results['num_plants_opened'] = 0
+        results['num_dcs_opened'] = 0
 
     return results
 
@@ -100,12 +131,18 @@ def run_sensitivity_analysis(instance_type='toy', gamma_values=None):
                 'Gamma': gamma,
                 'Converged': results['converged'],
                 'Iterations': results['iterations'],
+                'Start_Time': results.get('start_time', ''),
+                'End_Time': results.get('end_time', ''),
                 'Total_Time': results['total_time'],
                 'Optimal_Value': results['optimal_value'] if results['optimal_value'] is not None else float('nan'),
                 'LB': results['LB'],
                 'UB': results['UB'],
                 'Gap': results['gap'],
-                'Num_Scenarios': results['num_scenarios']
+                'Num_Scenarios': results['num_scenarios'],
+                'Num_Plants_Opened': results.get('num_plants_opened', 0),
+                'Num_DCs_Opened': results.get('num_dcs_opened', 0),
+                'Opened_Plants': str(results.get('opened_plants', [])),
+                'Opened_DCs': str(results.get('opened_dcs', []))
             }
 
             results_list.append(row)
@@ -128,12 +165,18 @@ def run_sensitivity_analysis(instance_type='toy', gamma_values=None):
                 'Gamma': gamma,
                 'Converged': False,
                 'Iterations': 0,
+                'Start_Time': '',
+                'End_Time': '',
                 'Total_Time': 0,
                 'Optimal_Value': float('nan'),
                 'LB': float('nan'),
                 'UB': float('nan'),
                 'Gap': float('nan'),
-                'Num_Scenarios': 0
+                'Num_Scenarios': 0,
+                'Num_Plants_Opened': 0,
+                'Num_DCs_Opened': 0,
+                'Opened_Plants': '[]',
+                'Opened_DCs': '[]'
             }
             results_list.append(row)
 
@@ -314,11 +357,20 @@ def main():
         print(f"Gamma: {single_gamma}")
         print(f"Converged: {results['converged']}")
         print(f"Iterations: {results['iterations']}")
+        print(f"Start Time: {results.get('start_time', 'N/A')}")
+        print(f"End Time: {results.get('end_time', 'N/A')}")
         print(f"Total Time: {results['total_time']:.2f}s")
-        print(f"Optimal Value: {results['optimal_value']:.2f}")
-        print(f"Lower Bound: {results['lower_bound']:.2f}")
-        print(f"Upper Bound: {results['upper_bound']:.2f}")
-        print(f"Gap: {results['gap']:.6f}")
+        # Handle None values for non-converged cases
+        opt_val_str = f"{results['optimal_value']:.2f}" if results['optimal_value'] is not None else "N/A"
+        lb_str = f"{results['LB']:.2f}" if results['LB'] != -float('inf') else "-inf"
+        ub_str = f"{results['UB']:.2f}" if results['UB'] != float('inf') else "inf"
+        gap_str = f"{results['gap']:.6f}" if results['gap'] != float('inf') else "inf"
+        print(f"Optimal Value: {opt_val_str}")
+        print(f"Lower Bound: {lb_str}")
+        print(f"Upper Bound: {ub_str}")
+        print(f"Gap: {gap_str}")
+        print(f"Plants Opened: {results.get('opened_plants', [])} ({results.get('num_plants_opened', 0)} plants)")
+        print(f"DCs Opened: {results.get('opened_dcs', [])} ({results.get('num_dcs_opened', 0)} DCs)")
         print("=" * 80)
 
         # Save single run result
@@ -332,12 +384,18 @@ def main():
             'DI_Scenario': di_scenario,
             'Converged': results['converged'],
             'Iterations': results['iterations'],
+            'Start_Time': results.get('start_time', ''),
+            'End_Time': results.get('end_time', ''),
             'Total_Time': results['total_time'],
             'Optimal_Value': results['optimal_value'],
-            'LB': results['lower_bound'],
-            'UB': results['upper_bound'],
+            'LB': results['LB'],
+            'UB': results['UB'],
             'Gap': results['gap'],
-            'Num_Scenarios': len(results['critical_scenarios']) if results['critical_scenarios'] else 0
+            'Num_Scenarios': len(results['critical_scenarios']) if results['critical_scenarios'] else 0,
+            'Num_Plants_Opened': results.get('num_plants_opened', 0),
+            'Num_DCs_Opened': results.get('num_dcs_opened', 0),
+            'Opened_Plants': str(results.get('opened_plants', [])),
+            'Opened_DCs': str(results.get('opened_dcs', []))
         }])
         df_single.to_csv(output_file, index=False)
         print(f"\nResults saved to: {output_file}")

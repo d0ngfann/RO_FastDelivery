@@ -59,7 +59,7 @@ class SupplyChainData:
         self.D2 = {}  # {(j,r): value}
 
         # Coordinates (for distance calculation)
-        self.plant_coords = {}  # {i: (x,y)}
+        self.plant_coords = {}  # {(k,i): (x,y)} - Product-specific plants
         self.dc_coords = {}  # {j: (x,y)}
         self.customer_coords = {}  # {r: (x,y)}
 
@@ -261,16 +261,34 @@ def generate_DI_scenarios(K=3, M=3, seed=None):
         k_params[scenario_type] = scenario_k_params
 
     # Generate Mixed scenario: Product 0 from HD, Product 1 from MD, Product 2 from LD
-    scenarios['Mixed'] = [
-        scenarios['HD'][0],   # Product 0: High sensitivity
-        scenarios['MD'][1],   # Product 1: Medium sensitivity
-        scenarios['LD'][2]    # Product 2: Low sensitivity
-    ]
-    k_params['Mixed'] = [
-        k_params['HD'][0],
-        k_params['MD'][1],
-        k_params['LD'][2]
-    ]
+    # Handle cases where K < 3
+    if K >= 3:
+        scenarios['Mixed'] = [
+            scenarios['HD'][0],   # Product 0: High sensitivity
+            scenarios['MD'][1],   # Product 1: Medium sensitivity
+            scenarios['LD'][2]    # Product 2: Low sensitivity
+        ]
+        k_params['Mixed'] = [
+            k_params['HD'][0],
+            k_params['MD'][1],
+            k_params['LD'][2]
+        ]
+    elif K == 2:
+        scenarios['Mixed'] = [
+            scenarios['HD'][0],   # Product 0: High sensitivity
+            scenarios['LD'][1]    # Product 1: Low sensitivity
+        ]
+        k_params['Mixed'] = [
+            k_params['HD'][0],
+            k_params['LD'][1]
+        ]
+    else:  # K == 1
+        scenarios['Mixed'] = [
+            scenarios['MD'][0]    # Product 0: Medium sensitivity
+        ]
+        k_params['Mixed'] = [
+            k_params['MD'][0]
+        ]
 
     return scenarios, k_params
 
@@ -366,8 +384,8 @@ def generate_supply_chain_data(config: ProblemConfig, seed=42):
     for r in range(R):
         for k in range(K):
             if data.s_rk[(r, k)] == 1:
-                # Generate demand using: 10 * U[1, 5]
-                data.mu[(r, k)] = 10.0 * np.random.uniform(1, 5)
+                # Generate demand using: 10 * U[0.8, 3.5] = [8, 35] (reduced from [10, 50])
+                data.mu[(r, k)] = 10.0 * np.random.uniform(0.8, 3.5)
             else:
                 # No demand for this product
                 data.mu[(r, k)] = 0.0
@@ -384,19 +402,24 @@ def generate_supply_chain_data(config: ProblemConfig, seed=42):
 
     # ========== Coordinates and Distances ==========
     # Generate coordinates with spatial patterns
-    # Plants: uniform distribution
-    data.plant_coords = generate_coordinates(I, config.grid_size, seed=seed, mode='uniform')
-    # DCs: donut pattern (exclude center) for better spatial distribution
+    # Plants: uniform distribution (PRODUCT-SPECIFIC - each product has its own set of plants)
+    for k in range(K):
+        # Each product k has I independent plant locations
+        plant_coords_k = generate_coordinates(I, config.grid_size, seed=seed+k*100, mode='uniform')
+        for i in range(I):
+            data.plant_coords[(k, i)] = plant_coords_k[i]
+
+    # DCs: donut pattern (exclude center) for better spatial distribution (SHARED across products)
     data.dc_coords = generate_coordinates(J, config.grid_size, seed=seed+1, mode='donut')
     # Customers: Gaussian clustered around center (more realistic)
     data.customer_coords = generate_coordinates(R, config.grid_size, seed=seed+2, mode='gaussian')
 
-    # Calculate distances D1_{kij} (plant i to DC j for product k)
-    # Distance independent of product, so same for all k
+    # Calculate distances D1_{kij} (product k plant i to DC j)
+    # Each product has independent plant locations
     for k in range(K):
         for i in range(I):
             for j in range(J):
-                dist = euclidean_distance(data.plant_coords[i], data.dc_coords[j])
+                dist = euclidean_distance(data.plant_coords[(k, i)], data.dc_coords[j])
                 data.D1[(k, i, j)] = dist
 
     # Calculate distances D2_{jr} (DC j to customer r)

@@ -1,0 +1,704 @@
+
+================================================================================
+ROBUST SUPPLY CHAIN OPTIMIZATION - C&CG ALGORITHM
+================================================================================
+Instance Type: FULL
+Dataset Seed: 31
+DI Scenario: Mixed
+Start Time: 2026-01-02 14:52:20
+================================================================================
+Loading data from data/DH_data_full_seed31.pkl...
+
+Applying DI scenario: Mixed
+DI values:
+  Product 0: ['1.000', '1.311', '1.718'] (k=0.667)
+  Product 1: ['1.000', '1.270', '1.614'] (k=0.590)
+  Product 2: ['1.000', '1.119', '1.251'] (k=0.276)
+============================================================
+SUPPLY CHAIN DATA SUMMARY
+============================================================
+Dimensions: K=3, I=3, J=10, R=50, M=3
+
+Economic Parameters:
+  Selling price (S): 100.0
+  Shortage cost (SC): 50.0
+
+Capacities:
+  Plant capacity (MP): min=953, max=1707
+  DC capacity (MC): min=537, max=893
+
+Demand Structure (s_rk matrix):
+  Total customer-product pairs: 83/150 (44.7% sparse)
+  Average products per customer: 1.66
+
+Demand (only non-zero entries):
+  Nominal (μ): min=8.03, max=34.96, count=83
+  Deviation (μ̂): min=4.06, max=9.95
+
+Costs:
+  Plant fixed cost: min=5416, max=9026
+  DC fixed cost: min=3584, max=5357
+  Transport modes (TC): [0.05, 0.1, 0.2]
+
+Demand Increase (DI) Scenarios:
+  HD:
+    Product 0: ['1.000', '1.311', '1.718'] (k=0.667)
+    Product 1: ['1.000', '1.357', '1.840'] (k=0.752)
+    Product 2: ['1.000', '1.369', '1.875'] (k=0.775)
+  MD:
+    Product 0: ['1.000', '1.211', '1.467'] (k=0.473)
+    Product 1: ['1.000', '1.270', '1.614'] (k=0.590)
+    Product 2: ['1.000', '1.303', '1.698'] (k=0.653)
+  LD:
+    Product 0: ['1.000', '1.027', '1.054'] (k=0.065)
+    Product 1: ['1.000', '1.079', '1.163'] (k=0.187)
+    Product 2: ['1.000', '1.119', '1.251'] (k=0.276)
+  Mixed:
+    Product 0: ['1.000', '1.311', '1.718'] (k=0.667)
+    Product 1: ['1.000', '1.270', '1.614'] (k=0.590)
+    Product 2: ['1.000', '1.119', '1.251'] (k=0.276)
+============================================================
+
+Testing Gamma value: 20
+
+================================================================================
+RUNNING C&CG FOR Γ = 20
+================================================================================
+================================================================================
+INITIALIZING C&CG ALGORITHM
+================================================================================
+Problem: K=3, I=3, J=10, R=50, M=3
+Uncertainty Budget: Γ = 20
+Convergence Tolerance: ε = 200
+================================================================================
+Creating Master Problem...
+Set parameter LicenseID to value 276015
+Set parameter GURO_PAR_SPECIAL
+Set parameter TokenServer to value "license.crc.pitt.edu"
+Set parameter TimeLimit to value 3600
+Set parameter MIPGap to value 1e-06
+Set parameter Threads to value 0
+Set parameter OutputFlag to value 1
+Set parameter FeasibilityTol to value 1e-09
+Set parameter IntFeasTol to value 1e-09
+Set parameter OptimalityTol to value 1e-09
+Adding nominal scenario (η = 0)...
+    [DEBUG] Scenario 0 total demand: 0.00 (using FIXED beta values)
+    [DEBUG] Added scenario 0 to Master Problem:
+    [DEBUG]   - Added 90 A_ij variables
+    [DEBUG]   - Added 1500 A_jr variables
+    [DEBUG]   - Added 150 u variables
+    [DEBUG]   - Added 4500 X variables
+    [DEBUG]   - Added optimality cut: θ ≤ [operational profit for scenario 0]
+    [DEBUG]   - Total constraints in model: 16673
+    [DEBUG]   - Total variables in model: 8500
+Creating Subproblem...
+Set parameter TimeLimit to value 3600
+Set parameter MIPGap to value 1e-06
+Set parameter Threads to value 0
+Set parameter OutputFlag to value 1
+Set parameter FeasibilityTol to value 1e-09
+Set parameter IntFeasTol to value 1e-09
+Set parameter OptimalityTol to value 1e-09
+Initialization complete!
+
+
+================================================================================
+STARTING C&CG ITERATIONS
+================================================================================
+
+
+================================================================================
+ITERATION 1
+================================================================================
+[Iteration 1] Solving Master Problem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 16673 rows, 8500 columns and 48360 nonzeros
+Model fingerprint: 0xeba7d305
+Variable types: 6241 continuous, 2259 integer (2259 binary)
+Coefficient statistics:
+  Matrix range     [6e-01, 9e+02]
+  Objective range  [1e+00, 2e+04]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 2e+03]
+Found heuristic solution: objective -238544.2185
+Presolve removed 15820 rows and 7801 columns
+Presolve time: 0.02s
+Presolved: 853 rows, 699 columns, 2139 nonzeros
+Found heuristic solution: objective -214028.9410
+Variable types: 90 continuous, 609 integer (609 binary)
+
+Root relaxation: objective -8.993223e+04, 356 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    -89932.23009 -89932.230  0.00%     -    0s
+
+Explored 1 nodes (356 simplex iterations) in 0.02 seconds (0.03 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 3: -89932.2 -214029 -238544 
+No other solutions better than -89932.2
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -8.993223008929e+04, best bound -8.993223008929e+04, gap 0.0000%
+  Master solved in 0.02s
+  Master Objective (UB) = -89932.23, θ = 0.00
+  Upper Bound (UB) = -89932.23
+
+  [DEBUG] Verifying Optimality Cuts:
+  [DEBUG] Current θ = 0.00
+  [DEBUG]   ✓ Scenario 0: θ = 0.00 ≤ Q = 233834.37 (slack: 233834.37)
+  [DEBUG] All optimality cuts satisfied.
+[Iteration 1] Solving Subproblem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 3093 rows, 2389 columns and 8610 nonzeros
+Model fingerprint: 0xdb52f9ee
+Variable types: 2089 continuous, 300 integer (300 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+02]
+  Objective range  [4e+00, 2e+03]
+  Bounds range     [1e+00, 2e+02]
+  RHS range        [9e-01, 2e+02]
+Found heuristic solution: objective 1.241943e+13
+Presolve removed 3092 rows and 2360 columns
+Presolve time: 0.00s
+Presolved: 1 rows, 29 columns, 29 nonzeros
+Found heuristic solution: objective -405181.2374
+Variable types: 0 continuous, 29 integer (29 binary)
+Found heuristic solution: objective -419245.4442
+
+Root relaxation: objective -4.219569e+05, 1 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+*    0     0               0    -421956.9188 -421956.92  0.00%     -    0s
+
+Explored 1 nodes (1 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 4: -421957 -419245 -405181 1.24194e+13 
+No other solutions better than -421957
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -4.219569187901e+05, best bound -4.219569187901e+05, gap 0.0000%
+  Subproblem solved in 0.02s
+  Worst-case operational profit (Z_SP) = -140652.31
+  Scenario: 60 demand increases, 0 demand decreases
+
+  [DEBUG] Z_SP Calculation:
+  [DEBUG]   Dual objective (from Gurobi) = -421956.92
+  [DEBUG]   Revenue constant (S × d) = 281304.61
+  [DEBUG]   Z_SP = 281304.61 + -421956.92 = -140652.31
+  [DEBUG]   Current θ from Master = 0.00
+  [DEBUG]   ⚠️  Z_SP ≤ θ by 140652.31 (should not happen if not duplicate!)
+  True Robust Profit (Z_current) = -230584.54
+  Lower Bound (LB) = -230584.54
+  Gap (UB-LB) = 140652.3063, Absolute Gap = 140652.3063, Relative Gap = 1.563981
+  Not converged yet (gap = 140652.31 > ε = 200)
+
+  [DEBUG] Adding NEW scenario 1 to Master Problem...
+  [DEBUG] New scenario pattern: 60 increases, 0 decreases
+    [DEBUG] Scenario 1 total demand: 2813.05 (using FIXED beta values)
+    [DEBUG] Added scenario 1 to Master Problem:
+    [DEBUG]   - Added 90 A_ij variables
+    [DEBUG]   - Added 1500 A_jr variables
+    [DEBUG]   - Added 150 u variables
+    [DEBUG]   - Added 4500 X variables
+    [DEBUG]   - Added optimality cut: θ ≤ [operational profit for scenario 1]
+    [DEBUG]   - Total constraints in model: 31963
+    [DEBUG]   - Total variables in model: 14740
+  [DEBUG] Total scenarios in Master: 2
+Set parameter TimeLimit to value 3600
+Set parameter MIPGap to value 1e-06
+Set parameter Threads to value 0
+Set parameter OutputFlag to value 1
+Set parameter FeasibilityTol to value 1e-09
+Set parameter IntFeasTol to value 1e-09
+Set parameter OptimalityTol to value 1e-09
+
+================================================================================
+ITERATION 2
+================================================================================
+[Iteration 2] Solving Master Problem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 31963 rows, 14740 columns and 91201 nonzeros
+Model fingerprint: 0x1d24862f
+Variable types: 12481 continuous, 2259 integer (2259 binary)
+Coefficient statistics:
+  Matrix range     [6e-01, 9e+02]
+  Objective range  [1e+00, 2e+04]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+05]
+
+MIP start from previous solve produced solution with objective -230585 (0.01s)
+Loaded MIP start from previous solve with objective -230585
+
+Presolve removed 22057 rows and 9137 columns
+Presolve time: 0.09s
+Presolved: 9906 rows, 5603 columns, 52654 nonzeros
+Variable types: 3494 continuous, 2109 integer (2109 binary)
+
+Root relaxation: objective -9.293476e+04, 2780 iterations, 0.10 seconds (0.22 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 -92934.764    0   65 -230584.54 -92934.764  59.7%     -    0s
+H    0     0                    -164190.1554 -92934.764  43.4%     -    0s
+H    0     0                    -163335.8146 -92934.764  43.1%     -    0s
+H    0     0                    -160941.4637 -92934.764  42.3%     -    0s
+H    0     0                    -160572.8726 -92934.764  42.1%     -    0s
+H    0     0                    -111674.7704 -92934.764  16.8%     -    0s
+H    0     0                    -96363.14144 -92934.764  3.56%     -    0s
+     0     0 -93341.313    0  186 -96363.141 -93341.313  3.14%     -    0s
+H    0     0                    -94801.36830 -93341.358  1.54%     -    0s
+     0     0 -93354.503    0  185 -94801.368 -93354.503  1.53%     -    0s
+     0     0 -93354.736    0  188 -94801.368 -93354.736  1.53%     -    0s
+     0     0 -93354.736    0  188 -94801.368 -93354.736  1.53%     -    0s
+     0     0 -93405.174    0  326 -94801.368 -93405.174  1.47%     -    0s
+     0     0 -93405.174    0   65 -94801.368 -93405.174  1.47%     -    1s
+     0     0 -93462.591    0  330 -94801.368 -93462.591  1.41%     -    1s
+     0     0 -93486.083    0  343 -94801.368 -93486.083  1.39%     -    1s
+     0     0 -93487.901    0  340 -94801.368 -93487.901  1.39%     -    1s
+     0     0 -93643.103    0  341 -94801.368 -93643.103  1.22%     -    1s
+     0     0 -93651.205    0  345 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93651.205    0  346 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93651.205    0  351 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93651.205    0  349 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93651.205    0  352 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93651.205    0  352 -94801.368 -93651.205  1.21%     -    1s
+     0     0 -93678.552    0  347 -94801.368 -93678.552  1.18%     -    1s
+     0     0 -93714.143    0  344 -94801.368 -93714.143  1.15%     -    1s
+     0     0 -93754.502    0  348 -94801.368 -93754.502  1.10%     -    1s
+     0     0 -93807.372    0  348 -94801.368 -93807.372  1.05%     -    1s
+     0     0 -93866.540    0  347 -94801.368 -93866.540  0.99%     -    1s
+     0     0 -93876.183    0  347 -94801.368 -93876.183  0.98%     -    1s
+     0     0 -93876.183    0  347 -94801.368 -93876.183  0.98%     -    1s
+     0     0 -93876.183    0  347 -94801.368 -93876.183  0.98%     -    1s
+     0     0 -93876.183    0  350 -94801.368 -93876.183  0.98%     -    1s
+     0     0 -93876.183    0  348 -94801.368 -93876.183  0.98%     -    1s
+     0     0 -94429.772    0  343 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0   65 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  188 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  330 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  438 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  441 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  439 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94429.772    0  435 -94801.368 -94429.772  0.39%     -    1s
+     0     0 -94438.690    0  439 -94801.368 -94438.690  0.38%     -    1s
+H    0     0                    -94626.96219 -94438.690  0.20%     -    1s
+     0     0 -94471.183    0  437 -94626.962 -94471.183  0.16%     -    1s
+H    0     0                    -94534.44124 -94471.183  0.07%     -    1s
+     0     0 -94534.441    0  439 -94534.441 -94534.441  0.00%     -    1s
+
+Cutting planes:
+  Gomory: 32
+  Lift-and-project: 4
+  Implied bound: 28
+  MIR: 7
+  Flow cover: 63
+  Flow path: 13
+
+Explored 1 nodes (14020 simplex iterations) in 1.74 seconds (2.90 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 10: -94534.4 -94627 -94801.4 ... -163336
+No other solutions better than -94534.4
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -9.453444124216e+04, best bound -9.453444124216e+04, gap 0.0000%
+  Master solved in 1.74s
+  Master Objective (UB) = -94534.44, θ = 0.00
+  Upper Bound (UB) = -94534.44
+
+  [DEBUG] Verifying Optimality Cuts:
+  [DEBUG] Current θ = 0.00
+  [DEBUG]   ✓ Scenario 0: θ = 0.00 ≤ Q = 195033.73 (slack: 195033.73)
+  [DEBUG]   ⚠️  Scenario 1: θ = 0.00 > Q = -38800.64 (violation: 38800.64)
+  [DEBUG] ⚠️  WARNING: 1 optimality cut(s) violated!
+  [DEBUG] This should NEVER happen - indicates implementation bug!
+[Iteration 2] Solving Subproblem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 3093 rows, 2389 columns and 8610 nonzeros
+Model fingerprint: 0xc9973cf3
+Variable types: 2089 continuous, 300 integer (300 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+02]
+  Objective range  [2e-15, 2e+03]
+  Bounds range     [1e+00, 2e+02]
+  RHS range        [3e-14, 2e+02]
+Found heuristic solution: objective 1.288703e+13
+Presolve removed 2966 rows and 2254 columns
+Presolve time: 0.01s
+Presolved: 127 rows, 135 columns, 365 nonzeros
+Found heuristic solution: objective 2005440.8476
+Variable types: 85 continuous, 50 integer (50 binary)
+Found heuristic solution: objective 1996744.4889
+
+Root relaxation: objective -2.689188e+05, 105 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 -268918.76    0   27 1996744.49 -268918.76   113%     -    0s
+H    0     0                    -249101.3420 -268918.76  7.96%     -    0s
+H    0     0                    -254100.9849 -268918.76  5.83%     -    0s
+H    0     0                    -254764.1497 -268918.76  5.56%     -    0s
+H    0     0                    -255442.6714 -268918.76  5.28%     -    0s
+H    0     0                    -255617.8398 -268918.76  5.20%     -    0s
+H    0     0                    -256296.3614 -268918.76  4.92%     -    0s
+H    0     0                    -256548.2967 -268056.39  4.49%     -    0s
+     0     0 -261775.46    0   17 -256548.30 -261775.46  2.04%     -    0s
+     0     0 -261765.79    0   17 -256548.30 -261765.79  2.03%     -    0s
+H    0     0                    -257068.4551 -261437.63  1.70%     -    0s
+H    0     0                    -258046.6911 -261437.63  1.31%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  MIR: 62
+  RLT: 2
+  Relax-and-lift: 1
+
+Explored 1 nodes (171 simplex iterations) in 0.01 seconds (0.01 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 10: -258047 -257068 -256548 ... 1.99674e+06
+No other solutions better than -258047
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -2.580466910649e+05, best bound -2.580466910649e+05, gap 0.0000%
+  Subproblem solved in 0.03s
+  Worst-case operational profit (Z_SP) = -17202.57
+  Scenario: 60 demand increases, 0 demand decreases
+
+  [DEBUG] Z_SP Calculation:
+  [DEBUG]   Dual objective (from Gurobi) = -258046.69
+  [DEBUG]   Revenue constant (S × d) = 240844.12
+  [DEBUG]   Z_SP = 240844.12 + -258046.69 = -17202.57
+  [DEBUG]   Current θ from Master = 0.00
+  [DEBUG]   ⚠️  Z_SP ≤ θ by 17202.57 (should not happen if not duplicate!)
+  True Robust Profit (Z_current) = -111737.01
+  Lower Bound (LB) = -111737.01
+  Gap (UB-LB) = 17202.5669, Absolute Gap = 17202.5669, Relative Gap = 0.181971
+  Not converged yet (gap = 17202.57 > ε = 200)
+
+  [DEBUG] Adding NEW scenario 2 to Master Problem...
+  [DEBUG] New scenario pattern: 60 increases, 0 decreases
+    [DEBUG] Scenario 2 total demand: 2408.44 (using FIXED beta values)
+    [DEBUG] Added scenario 2 to Master Problem:
+    [DEBUG]   - Added 90 A_ij variables
+    [DEBUG]   - Added 1500 A_jr variables
+    [DEBUG]   - Added 150 u variables
+    [DEBUG]   - Added 4500 X variables
+    [DEBUG]   - Added optimality cut: θ ≤ [operational profit for scenario 2]
+    [DEBUG]   - Total constraints in model: 47253
+    [DEBUG]   - Total variables in model: 20980
+  [DEBUG] Total scenarios in Master: 3
+Set parameter TimeLimit to value 3600
+Set parameter MIPGap to value 1e-06
+Set parameter Threads to value 0
+Set parameter OutputFlag to value 1
+Set parameter FeasibilityTol to value 1e-09
+Set parameter IntFeasTol to value 1e-09
+Set parameter OptimalityTol to value 1e-09
+
+================================================================================
+ITERATION 3
+================================================================================
+[Iteration 3] Solving Master Problem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 47253 rows, 20980 columns and 134042 nonzeros
+Model fingerprint: 0x31aae6e2
+Variable types: 18721 continuous, 2259 integer (2259 binary)
+Coefficient statistics:
+  Matrix range     [6e-01, 9e+02]
+  Objective range  [1e+00, 2e+04]
+  Bounds range     [1e+00, 1e+00]
+  RHS range        [1e+00, 3e+05]
+
+MIP start from previous solve produced solution with objective -111737 (0.02s)
+Loaded MIP start from previous solve with objective -111737
+
+Presolve removed 28824 rows and 11884 columns
+Presolve time: 0.19s
+Presolved: 18429 rows, 9096 columns, 98805 nonzeros
+Variable types: 6987 continuous, 2109 integer (2109 binary)
+
+Root relaxation: objective -9.293476e+04, 4366 iterations, 0.26 seconds (0.64 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 -92934.764    0   65 -111737.01 -92934.764  16.8%     -    0s
+H    0     0                    -96363.14144 -92934.764  3.56%     -    0s
+     0     0 -93359.167    0  188 -96363.141 -93359.167  3.12%     -    0s
+H    0     0                    -95893.89774 -93359.174  2.64%     -    1s
+     0     0 -93368.278    0  194 -95893.898 -93368.278  2.63%     -    1s
+     0     0 -93368.669    0  200 -95893.898 -93368.669  2.63%     -    1s
+     0     0 -93368.729    0  201 -95893.898 -93368.729  2.63%     -    1s
+     0     0 -93368.729    0  201 -95893.898 -93368.729  2.63%     -    1s
+     0     0 -93422.615    0  343 -95893.898 -93422.615  2.58%     -    1s
+     0     0 -93431.337    0  339 -95893.898 -93431.337  2.57%     -    2s
+     0     0 -93433.218    0  337 -95893.898 -93433.218  2.57%     -    2s
+     0     0 -93433.601    0  336 -95893.898 -93433.601  2.57%     -    2s
+     0     0 -93433.627    0  339 -95893.898 -93433.627  2.57%     -    2s
+     0     0 -93508.750    0  431 -95893.898 -93508.750  2.49%     -    2s
+     0     0 -93515.195    0  441 -95893.898 -93515.195  2.48%     -    2s
+     0     0 -93525.029    0  345 -95893.898 -93525.029  2.47%     -    3s
+     0     0 -93526.306    0  351 -95893.898 -93526.306  2.47%     -    3s
+     0     0 -93526.739    0  355 -95893.898 -93526.739  2.47%     -    3s
+     0     0 -93527.186    0  355 -95893.898 -93527.186  2.47%     -    3s
+     0     0 -93527.346    0  450 -95893.898 -93527.346  2.47%     -    3s
+     0     0 -93527.399    0  450 -95893.898 -93527.399  2.47%     -    3s
+     0     0 -93539.665    0  444 -95893.898 -93539.665  2.46%     -    3s
+     0     0 -93542.362    0  447 -95893.898 -93542.362  2.45%     -    3s
+     0     0 -93542.753    0  362 -95893.898 -93542.753  2.45%     -    3s
+     0     0 -93543.571    0  362 -95893.898 -93543.571  2.45%     -    3s
+     0     0 -93544.084    0  363 -95893.898 -93544.084  2.45%     -    3s
+     0     0 -93544.381    0  361 -95893.898 -93544.381  2.45%     -    3s
+     0     0 -93544.985    0  363 -95893.898 -93544.985  2.45%     -    4s
+     0     0 -93545.356    0  361 -95893.898 -93545.356  2.45%     -    4s
+     0     0 -93545.377    0  362 -95893.898 -93545.377  2.45%     -    4s
+     0     0 -93546.707    0  458 -95893.898 -93546.707  2.45%     -    4s
+     0     0 -93547.362    0  548 -95893.898 -93547.362  2.45%     -    4s
+     0     0 -93547.649    0  553 -95893.898 -93547.649  2.45%     -    4s
+     0     0 -93547.731    0  555 -95893.898 -93547.731  2.45%     -    4s
+     0     0 -93549.129    0  549 -95893.898 -93549.129  2.45%     -    4s
+     0     0 -93555.440    0  547 -95893.898 -93555.440  2.44%     -    4s
+     0     0 -93814.927    0  554 -95893.898 -93814.927  2.17%     -    4s
+     0     0 -93814.927    0  555 -95893.898 -93814.927  2.17%     -    4s
+     0     0 -93814.927    0  365 -95893.898 -93814.927  2.17%     -    4s
+     0     0 -93814.927    0  362 -95893.898 -93814.927  2.17%     -    5s
+     0     0 -93814.927    0  362 -95893.898 -93814.927  2.17%     -    5s
+     0     0 -93872.076    0  365 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93872.076    0  363 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93872.076    0  363 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93872.076    0  365 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93872.076    0  363 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93872.076    0  363 -95893.898 -93872.076  2.11%     -    5s
+     0     0 -93894.068    0  361 -95893.898 -93894.068  2.09%     -    6s
+     0     0 -93894.068    0  356 -95893.898 -93894.068  2.09%     -    6s
+H    0     2                    -95683.91529 -93894.068  1.87%     -    7s
+     0     2 -93894.068    0  356 -95683.915 -93894.068  1.87%     -    7s
+     1     4 -95333.299    1  618 -95683.915 -93894.068  1.87% 18818   11s
+
+Cutting planes:
+  Gomory: 9
+  Lift-and-project: 11
+  Implied bound: 92
+  MIR: 72
+  Flow cover: 171
+  Flow path: 45
+  Network: 1
+  RLT: 3
+  Relax-and-lift: 4
+
+Explored 276 nodes (130423 simplex iterations) in 13.70 seconds (38.82 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 4: -95683.9 -95893.9 -96363.1 -111737 
+No other solutions better than -95683.9
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -9.568391529339e+04, best bound -9.568391529339e+04, gap 0.0000%
+  Master solved in 13.72s
+  Master Objective (UB) = -95683.92, θ = 0.00
+  Upper Bound (UB) = -95683.92
+
+  [DEBUG] Verifying Optimality Cuts:
+  [DEBUG] Current θ = 0.00
+  [DEBUG]   ✓ Scenario 0: θ = 0.00 ≤ Q = 191520.36 (slack: 191520.36)
+  [DEBUG]   ⚠️  Scenario 1: θ = 0.00 > Q = -42314.01 (violation: 42314.01)
+  [DEBUG]   ⚠️  Scenario 2: θ = 0.00 > Q = -3513.37 (violation: 3513.37)
+  [DEBUG] ⚠️  WARNING: 2 optimality cut(s) violated!
+  [DEBUG] This should NEVER happen - indicates implementation bug!
+[Iteration 3] Solving Subproblem...
+Gurobi Optimizer version 12.0.3 build v12.0.3rc0 (linux64 - "Red Hat Enterprise Linux 9.6 (Plow)")
+
+CPU model: AMD EPYC 9374F 32-Core Processor, instruction set [SSE2|AVX|AVX2|AVX512]
+Thread count: 64 physical cores, 64 logical processors, using up to 32 threads
+
+Non-default parameters:
+TimeLimit  3600
+FeasibilityTol  1e-09
+IntFeasTol  1e-09
+MIPGap  1e-06
+OptimalityTol  1e-09
+
+Optimize a model with 3093 rows, 2389 columns and 8610 nonzeros
+Model fingerprint: 0x2eb00e01
+Variable types: 2089 continuous, 300 integer (300 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 2e+02]
+  Objective range  [4e+00, 2e+03]
+  Bounds range     [1e+00, 2e+02]
+  RHS range        [9e-01, 2e+02]
+Found heuristic solution: objective 1.313399e+13
+Presolve removed 2948 rows and 2263 columns
+Presolve time: 0.01s
+Presolved: 145 rows, 126 columns, 389 nonzeros
+Found heuristic solution: objective -188657.7696
+Variable types: 73 continuous, 53 integer (53 binary)
+Found heuristic solution: objective -193631.7068
+
+Root relaxation: objective -2.540504e+05, 123 iterations, 0.00 seconds (0.00 work units)
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 -254050.40    0   33 -193631.71 -254050.40  31.2%     -    0s
+H    0     0                    -237683.1224 -254050.40  6.89%     -    0s
+H    0     0                    -238361.6441 -254050.40  6.58%     -    0s
+     0     0 -244475.54    0   17 -238361.64 -244475.54  2.56%     -    0s
+     0     0 -244304.49    0   17 -238361.64 -244304.49  2.49%     -    0s
+H    0     0                    -238673.0836 -243974.89  2.22%     -    0s
+H    0     0                    -240537.6225 -240537.62  0.00%     -    0s
+     0     0          -    0      -240537.62 -240537.62  0.00%     -    0s
+
+Cutting planes:
+  Gomory: 1
+  MIR: 61
+  RLT: 2
+  PSD: 8
+
+Explored 1 nodes (221 simplex iterations) in 0.02 seconds (0.01 work units)
+Thread count was 32 (of 64 available processors)
+
+Solution count 7: -240538 -238673 -238362 ... 1.3134e+13
+No other solutions better than -240538
+
+Optimal solution found (tolerance 1.00e-06)
+Best objective -2.405376225216e+05, best bound -2.405376225216e+05, gap 0.0000%
+  Subproblem solved in 0.03s
+  Worst-case operational profit (Z_SP) = -3206.87
+  Scenario: 60 demand increases, 0 demand decreases
+
+  [DEBUG] Z_SP Calculation:
+  [DEBUG]   Dual objective (from Gurobi) = -240537.62
+  [DEBUG]   Revenue constant (S × d) = 237330.75
+  [DEBUG]   Z_SP = 237330.75 + -240537.62 = -3206.87
+  [DEBUG]   Current θ from Master = 0.00
+  [DEBUG]   ⚠️  Z_SP ≤ θ by 3206.87 (should not happen if not duplicate!)
+  True Robust Profit (Z_current) = -98890.78
+  Lower Bound (LB) = -98890.78
+  Gap (UB-LB) = 3206.8689, Absolute Gap = 3206.8689, Relative Gap = 0.033515
+  Not converged yet (gap = 3206.87 > ε = 200)
+
+  [DEBUG] Scenario is DUPLICATE - checking details:
+  [DEBUG] Matches scenario 2
+  [DEBUG] Scenario pattern: 60 increases, 0 decreases
+  [DEBUG] NOT adding to Master Problem (duplicate)
+
+  WARNING: Duplicate scenario detected - algorithm stalled!
+  Current gap: 3206.868927
+  This may indicate numerical issues or model formulation error.
+  Terminating with current best solution.
+
+
+================================================================================
+C&CG ALGORITHM COMPLETED
+================================================================================
+Total Iterations: 3
+Total Time: 16.12s
+Converged: False
+Final Lower Bound: -98890.7842
+Final Upper Bound: -95683.9153
+Final Gap: 3206.868927
+Number of Critical Scenarios: 3
+================================================================================
+
+================================================================================
+OPTIMAL SOLUTION SUMMARY
+================================================================================
+Product 0 Plants: [1] (1/3)
+Product 1 Plants: [0] (1/3)
+Product 2 Plants: [2] (1/3)
+Total Plant Openings: 3
+DCs Opened: [1, 6] (2/10)
+Active Routes (Plant→DC): 2
+Active Routes (DC→Customer): 50
+Transportation Modes: Mode 0: 40 customers  Mode 1: 5 customers  Mode 2: 5 customers  
+================================================================================
+
+================================================================================
+SINGLE RUN RESULTS
+================================================================================
+Gamma: 20
+Converged: False
+Iterations: 3
+Start Time: 2026-01-02 14:52:20
+End Time: 2026-01-02 14:52:36
+Total Time: 16.12s
+Optimal Value: -98890.78
+Lower Bound: -98890.78
+Upper Bound: -95683.92
+Gap: 3206.868927
+Plants Opened: {0: [1], 1: [0], 2: [2]} (3 plants)
+DCs Opened: [1, 6] (2 DCs)
+================================================================================
+
+Results saved to: result/DH_single_full_seed31_Mixed_gamma20_20260102_145236.csv
+
+Total Execution Time: 16.17 seconds
+End Time: 2026-01-02 14:52:36
+
+All tasks completed successfully!
+

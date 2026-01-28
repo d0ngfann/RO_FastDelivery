@@ -64,10 +64,14 @@ class Subproblem:
         self.fixed_beta = None
         self.fixed_alpha = None
 
+        # Track constraints that depend on fixed first-stage variables
+        # These will be removed and re-added when first-stage solution changes
+        self.dual_feasibility_constrs = []
+
         # Build model
         self._build_variables()
         self._build_constraints()
-        # Objective will be built after fixing first-stage variables
+        # Objective and dual feasibility will be built after fixing first-stage variables
 
         self.model.update()
 
@@ -238,7 +242,32 @@ class Subproblem:
 
         Args:
             solution: dict with keys 'x', 'y', 'z', 'w', 'beta', 'alpha'
+
+        Note: This method is called every iteration with potentially different first-stage values.
+        We must remove old dual feasibility constraints (which depend on fixed_alpha)
+        and rebuild them with the new fixed values.
         """
+        # DEBUG: Check if beta values have changed
+        beta_changed = False
+        if self.fixed_beta is not None:
+            for key in solution['beta']:
+                if abs(solution['beta'][key] - self.fixed_beta[key]) > 1e-6:
+                    beta_changed = True
+                    break
+
+        print(f"\n  [DEBUG-SUBPROBLEM] fix_first_stage() called")
+        if self.fixed_beta is not None:
+            print(f"  [DEBUG-SUBPROBLEM] Beta values changed: {beta_changed}")
+            if beta_changed:
+                # Show a few changed beta values
+                count = 0
+                for key in solution['beta']:
+                    if abs(solution['beta'][key] - self.fixed_beta[key]) > 1e-6 and count < 3:
+                        print(f"  [DEBUG-SUBPROBLEM]   beta{key}: {self.fixed_beta[key]:.4f} -> {solution['beta'][key]:.4f}")
+                        count += 1
+        else:
+            print(f"  [DEBUG-SUBPROBLEM] First call (no previous beta)")
+
         self.fixed_x = solution['x']
         self.fixed_y = solution['y']
         self.fixed_z = solution['z']
@@ -246,26 +275,52 @@ class Subproblem:
         self.fixed_beta = solution['beta']
         self.fixed_alpha = solution['alpha']
 
-        # Now add dual feasibility constraints and objective
+        # Remove old dual feasibility constraints (they depend on fixed_alpha)
+        if self.dual_feasibility_constrs:
+            num_old_constrs = len(self.dual_feasibility_constrs)
+            print(f"  [DEBUG-SUBPROBLEM] Removing {num_old_constrs} old dual feasibility constraints")
+            for constr in self.dual_feasibility_constrs:
+                self.model.remove(constr)
+            self.dual_feasibility_constrs = []
+            self.model.update()
+
+        # Add new dual feasibility constraints with updated fixed values
+        print(f"  [DEBUG-SUBPROBLEM] Adding new dual feasibility constraints")
         self._build_dual_feasibility()
+        num_new_constrs = len(self.dual_feasibility_constrs)
+        print(f"  [DEBUG-SUBPROBLEM] Added {num_new_constrs} new dual feasibility constraints")
+
+        # Update objective (depends on fixed_beta)
+        print(f"  [DEBUG-SUBPROBLEM] Updating objective function")
         self._build_objective()
+
         self.model.update()
 
+        # DEBUG: Show model fingerprint
+        print(f"  [DEBUG-SUBPROBLEM] Model fingerprint after update: {hex(self.model.fingerprint)}")
+
     def _build_dual_feasibility(self):
-        """Build dual feasibility constraints with fixed first-stage variables."""
+        """
+        Build dual feasibility constraints with fixed first-stage variables.
+
+        Note: These constraints depend on fixed_alpha, so they must be rebuilt
+        whenever the first-stage solution changes.
+        """
         # Dual feasibility for A_ij^k:
         # pi[k,i] + sigma[j] + psi[k,i,j] + kappa[k,j] >= -h_j/2 - D1[k,i,j]*t - F[k,i]
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
                     rhs = -(self.data.h[j] / 2) - self.data.D1[(k, i, j)] * self.data.t - self.data.F[(k, i)]
-                    self.model.addConstr(
+                    constr = self.model.addConstr(
                         self.pi[(k, i)] + self.sigma[j] + self.psi[(k, i, j)] + self.kappa[(k, j)] >= rhs,
                         name=f"dual_Aij_k{k}_i{i}_j{j}"
                     )
+                    self.dual_feasibility_constrs.append(constr)
 
         # Dual feasibility for A_jr^k:
         # phi[k,j,r] + gamma[r,k] - kappa[k,j] >= -Σ_m D2[j,r] * TC[m] * alpha[j,r,m]
+        # This RHS depends on fixed_alpha, so it changes when alpha changes
         for k in range(self.K):
             for j in range(self.J):
                 for r in range(self.R):
@@ -273,20 +328,22 @@ class Subproblem:
                         self.data.D2[(j, r)] * self.data.TC[m] * self.fixed_alpha[(j, r, m)]
                         for m in range(self.M)
                     )
-                    self.model.addConstr(
+                    constr = self.model.addConstr(
                         self.phi[(k, j, r)] + self.gamma[(r, k)] - self.kappa[(k, j)] >= rhs,
                         name=f"dual_Ajr_k{k}_j{j}_r{r}"
                     )
+                    self.dual_feasibility_constrs.append(constr)
 
         # Dual feasibility for u_rk:
         # gamma[r,k] >= -(S + SC)
         # This is already enforced by variable bounds, but we can add explicit constraint for clarity
         for r in range(self.R):
             for k in range(self.K):
-                self.model.addConstr(
+                constr = self.model.addConstr(
                     self.gamma[(r, k)] >= -(self.data.S + self.data.SC),
                     name=f"dual_u_r{r}_k{k}"
                 )
+                self.dual_feasibility_constrs.append(constr)
 
     def _build_objective(self):
         """Build objective function (dual objective to minimize)."""
@@ -313,9 +370,9 @@ class Subproblem:
             for j in range(self.J)
         )
 
-        # Route plant-DC term
+        # Route plant-DC term (PRODUCT-SPECIFIC z_{kij})
         obj += gp.quicksum(
-            self.data.MC[j] * self.fixed_z[(i, j)] * self.psi[(k, i, j)]
+            self.data.MC[j] * self.fixed_z[(k, i, j)] * self.psi[(k, i, j)]
             for k in range(self.K)
             for i in range(self.I)
             for j in range(self.J)
@@ -337,9 +394,20 @@ class Subproblem:
             for k in range(self.K)
         )
 
-        # Uncertainty term (linearized)
+        # Uncertainty term (linearized): μ̂_rk × ξ_rk where ξ = (η⁺-η⁻)×γ
         obj += gp.quicksum(
             self.data.mu_hat[(r, k)] * (self.p_plus[(r, k)] - self.p_minus[(r, k)])
+            for r in range(self.R)
+            for k in range(self.K)
+        )
+
+        # CRITICAL: Add S×μ̂×(η⁺-η⁻) term for correct minimization over η
+        # Subproblem minimizes: S×d(η) + dual_obj(η)
+        # where d(η) = d_nominal + (η⁺-η⁻)×μ̂
+        # So we need to minimize: S×(η⁺-η⁻)×μ̂ + [capacity_terms + d×γ]
+        # The S×(η⁺-η⁻)×μ̂ term must be added to the objective!
+        obj += gp.quicksum(
+            self.data.S * self.data.mu_hat[(r, k)] * (self.eta_plus[(r, k)] - self.eta_minus[(r, k)])
             for r in range(self.R)
             for k in range(self.K)
         )
@@ -347,9 +415,34 @@ class Subproblem:
         self.model.setObjective(obj, GRB.MINIMIZE)
 
     def solve(self):
-        """Solve the subproblem."""
+        """
+        Solve the subproblem.
+
+        Returns:
+            bool: True if solved successfully (OPTIMAL or TIME_LIMIT with solution)
+        """
         self.model.optimize()
-        return self.model.Status == GRB.OPTIMAL
+        status = self.model.Status
+
+        # Accept OPTIMAL solution
+        if status == GRB.OPTIMAL:
+            return True
+
+        # Accept TIME_LIMIT with at least one solution found
+        # WARNING: This solution may be suboptimal
+        # Since we are MINIMIZING, suboptimal Z_SP may be LARGER than true minimum
+        # This causes LB to be over-estimated, potentially leading to negative gap
+        elif status == GRB.TIME_LIMIT and self.model.SolCount > 0:
+            mip_gap = self.model.MIPGap * 100
+            print(f"  ⚠️  WARNING: Subproblem time limit reached!")
+            print(f"  MIP Gap: {mip_gap:.4f}%")
+            print(f"  Using best solution found (may be suboptimal)")
+            print(f"  Note: Z_SP may be over-estimated (minimization problem)")
+            return True
+
+        # Failed to solve
+        else:
+            return False
 
     def get_worst_case_scenario(self):
         """
@@ -357,15 +450,14 @@ class Subproblem:
 
         Returns:
             tuple: (Z_SP, eta_plus, eta_minus)
-                Z_SP: Worst-case operational profit (includes revenue term)
+                Z_SP: Worst-case operational profit
                 eta_plus: dict {(r,k): value}
                 eta_minus: dict {(r,k): value}
         """
-        if self.model.Status != GRB.OPTIMAL:
+        # Check if we have a valid solution (OPTIMAL or TIME_LIMIT with solution)
+        status = self.model.Status
+        if status != GRB.OPTIMAL and not (status == GRB.TIME_LIMIT and self.model.SolCount > 0):
             return None, None, None
-
-        # Get dual objective value
-        dual_obj = self.model.ObjVal
 
         # Extract eta values
         eta_plus = {}
@@ -375,32 +467,33 @@ class Subproblem:
                 eta_plus[(r, k)] = round(self.eta_plus[(r, k)].X)
                 eta_minus[(r, k)] = round(self.eta_minus[(r, k)].X)
 
-        # CRITICAL FIX: Add revenue term back
-        # Revenue = S × Σ_{r,k} d_{rk} where d_{rk} = Σ_m μ DI β + (η+ - η-) μ̂
-        # This term is constant in the dual (since β, η are fixed) so it's not in dual objective
-        # We must add it back to get the true operational profit
-        revenue = 0.0
+        # Z_SP calculation after adding S×μ̂×(η⁺-η⁻) to objective:
+        # model.ObjVal now includes:
+        #   capacity_terms + d_nominal×γ + μ̂×(η⁺-η⁻)×γ + S×μ̂×(η⁺-η⁻)
+        # Therefore: Z_SP = S×d_nominal + model.ObjVal
+
+        dual_obj = self.model.ObjVal
+
+        # Calculate S×d_nominal (constant part only)
+        revenue_S_times_d_nominal = 0.0
         for r in range(self.R):
             for k in range(self.K):
-                # Calculate realized demand for this scenario
-                nominal_demand = sum(
+                d_nominal = sum(
                     self.data.mu[(r, k)] * self.data.DI[(m, k)] * self.fixed_beta[(r, m)]
                     for m in range(self.M)
                 )
-                uncertainty = (eta_plus[(r, k)] - eta_minus[(r, k)]) * self.data.mu_hat[(r, k)]
-                d_realized = nominal_demand + uncertainty
+                revenue_S_times_d_nominal += self.data.S * d_nominal
 
-                # Revenue from this customer-product pair
-                revenue += self.data.S * d_realized
-
-        # True operational profit = Revenue (constant) + Dual objective
-        Z_SP = revenue + dual_obj
+        # Z_SP = S×d_nominal + model.ObjVal
+        # (model.ObjVal already includes S×μ̂×(η⁺-η⁻) term now)
+        Z_SP = revenue_S_times_d_nominal + dual_obj
 
         return Z_SP, eta_plus, eta_minus
 
     def get_dual_solution(self):
         """Get dual variable values (for debugging/analysis)."""
-        if self.model.Status != GRB.OPTIMAL:
+        status = self.model.Status
+        if status != GRB.OPTIMAL and not (status == GRB.TIME_LIMIT and self.model.SolCount > 0):
             return None
 
         dual_sol = {

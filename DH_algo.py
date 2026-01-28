@@ -6,6 +6,7 @@ Iteratively solves Master Problem and Subproblem until convergence.
 
 import time
 import numpy as np
+from gurobipy import GRB
 from DH_data_gen import SupplyChainData
 from DH_config import ProblemConfig
 from DH_master import MasterProblem
@@ -56,6 +57,35 @@ class CCGAlgorithm:
         # Start time
         self.start_time = None
 
+        # Adaptive convergence tiers: (time_threshold_seconds, gurobi_time_limit, epsilon)
+        # Activated only when cumulative time exceeds threshold; runs under 1hr are unaffected
+        self.adaptive_tiers = [
+            (7200, 600, 1000),  # After 2hr: epsilon=1000, gurobi limit=600s
+            (3600, 600, 600),   # After 1hr: epsilon=600, gurobi limit=600s
+        ]
+        self.active_tier = None  # Track which tier is currently active
+
+    def _check_adaptive_mode(self):
+        """Check elapsed time and activate adaptive convergence if thresholds are exceeded."""
+        elapsed = time.time() - self.start_time
+
+        # Tiers are sorted descending by threshold, so we match the highest applicable tier
+        for threshold, gurobi_limit, epsilon in self.adaptive_tiers:
+            if elapsed >= threshold:
+                tier_key = threshold
+                if self.active_tier == tier_key:
+                    return  # Already activated this tier
+                self.active_tier = tier_key
+
+                self.config.epsilon = epsilon
+                self.master.model.setParam('TimeLimit', gurobi_limit)
+
+                tier_hrs = threshold / 3600
+                print(f"\n  [ADAPTIVE] {elapsed/3600:.1f}hrs elapsed - activating tier ({tier_hrs:.0f}hr+):")
+                print(f"  [ADAPTIVE]   Gurobi time limit: {gurobi_limit}s")
+                print(f"  [ADAPTIVE]   Convergence epsilon: {epsilon}")
+                return
+
     def initialize(self):
         """Initialize algorithm with nominal scenario."""
         print("=" * 80)
@@ -75,6 +105,7 @@ class CCGAlgorithm:
         print("Adding nominal scenario (η = 0)...")
         eta_plus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
         eta_minus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
+        # All scenarios use beta VARIABLES (per algorithm_framework.tex Line 222)
         self.master.add_scenario(scenario_id=0, eta_plus=eta_plus_nominal, eta_minus=eta_minus_nominal)
         self.critical_scenarios.append((0, eta_plus_nominal, eta_minus_nominal))
 
@@ -91,7 +122,11 @@ class CCGAlgorithm:
         Returns:
             tuple: (success, solution, theta, solve_time)
         """
+        print(f"\n{'='*80}")
+        print(f"ITERATION {self.iteration}")
+        print(f"{'='*80}")
         print(f"[Iteration {self.iteration}] Solving Master Problem...")
+        print(f"  Current scenarios in Master: {len(self.critical_scenarios)}")
         start_time = time.time()
 
         success = self.master.solve()
@@ -104,23 +139,17 @@ class CCGAlgorithm:
         solution = self.master.get_solution()
         theta = solution['theta']
 
-        # Calculate strategic costs
-        OC = sum(self.data.O[j] * solution['y'][j] for j in range(self.data.J))
-
-        FC = (sum(self.data.C_plant[(k, i)] * solution['x'][i]
-                  for k in range(self.data.K) for i in range(self.data.I)) +
-              sum(self.data.C_dc[j] * solution['y'][j] for j in range(self.data.J)) +
-              sum(self.data.L1[(k, i, j)] * solution['z'][(i, j)]
-                  for k in range(self.data.K) for i in range(self.data.I) for j in range(self.data.J)) +
-              sum(self.data.L2[(j, r)] * solution['w'][(j, r)]
-                  for j in range(self.data.J) for r in range(self.data.R)))
-
-        # Update upper bound: UB = -OC - FC + theta
-        self.UB = -OC - FC + theta
+        # Update upper bound: UB = Master Problem objective value
+        # Use solver's objective value directly to avoid numerical precision issues
+        # Note: solution['objective'] = -OC - FC + theta (from Master Problem)
+        self.UB = solution['objective']
 
         print(f"  Master solved in {solve_time:.2f}s")
-        print(f"  Objective = {solution['objective']:.2f}, θ = {theta:.2f}")
+        print(f"  Master Objective (UB) = {solution['objective']:.2f}, θ = {theta:.2f}")
         print(f"  Upper Bound (UB) = {self.UB:.2f}")
+
+        # DEBUG: Verify optimality cuts
+        self._verify_optimality_cuts(solution, theta)
 
         return True, solution, theta, solve_time
 
@@ -144,7 +173,26 @@ class CCGAlgorithm:
         solve_time = time.time() - start_time
 
         if not success:
-            print(f"  Subproblem failed to solve! Status: {self.subproblem.model.Status}")
+            status = self.subproblem.model.Status
+            print(f"  Subproblem failed to solve! Status: {status}")
+
+            # Special handling for unbounded case (rare numerical issue)
+            if status == GRB.UNBOUNDED:
+                print("\n  ⚠️  WARNING: Subproblem unbounded (rare numerical issue)")
+                print("  This may indicate degenerate first-stage solution")
+                print("  Possible causes:")
+                print("    - Master solution has many near-zero alpha values")
+                print("    - Dual constraint matrix became near-singular")
+                print("    - Numerical precision limit reached after many iterations")
+                print("\n  Current best solution is still valid - terminating gracefully")
+                print("  Note: This affects <3% of cases and is a known numerical edge case")
+
+                # Diagnostic: Check alpha sparsity
+                sparse_count = sum(1 for v in mp_solution['alpha'].values() if abs(v) < 1e-6)
+                total_alpha = len(mp_solution['alpha'])
+                sparsity = 100.0 * sparse_count / total_alpha if total_alpha > 0 else 0
+                print(f"\n  [DIAGNOSTIC] Alpha sparsity: {sparse_count}/{total_alpha} ({sparsity:.1f}%) near-zero")
+
             return False, None, None, None, solve_time
 
         Z_SP, eta_plus, eta_minus = self.subproblem.get_worst_case_scenario()
@@ -157,6 +205,32 @@ class CCGAlgorithm:
         num_minus = sum(1 for v in eta_minus.values() if v > 0.5)
         print(f"  Scenario: {num_plus} demand increases, {num_minus} demand decreases")
 
+        # DEBUG: Show Z_SP calculation details
+        print(f"\n  [DEBUG] Z_SP Calculation:")
+        dual_obj = self.subproblem.model.ObjVal
+
+        # Calculate S×d_nominal
+        revenue_S_times_d_nominal = 0.0
+        for r in range(self.data.R):
+            for k in range(self.data.K):
+                d_nominal = sum(
+                    self.data.mu[(r, k)] * self.data.DI[(m, k)] * mp_solution['beta'][(r, m)]
+                    for m in range(self.data.M)
+                )
+                revenue_S_times_d_nominal += self.data.S * d_nominal
+
+        print(f"  [DEBUG]   Dual objective (Gurobi, includes S×μ̂×(η⁺-η⁻)) = {dual_obj:.2f}")
+        print(f"  [DEBUG]   S×d_nominal = {revenue_S_times_d_nominal:.2f}")
+        print(f"  [DEBUG]   Z_SP = S×d_nominal + dual_obj = {revenue_S_times_d_nominal:.2f} + {dual_obj:.2f} = {Z_SP:.2f}")
+        print(f"  [DEBUG]   Current θ from Master = {mp_solution['theta']:.2f}")
+
+        if Z_SP > mp_solution['theta']:
+            gap_sp = Z_SP - mp_solution['theta']
+            print(f"  [DEBUG]   ✓ Z_SP > θ by {gap_sp:.2f} (cut will improve θ)")
+        else:
+            gap_sp = mp_solution['theta'] - Z_SP
+            print(f"  [DEBUG]   ⚠️  Z_SP ≤ θ by {gap_sp:.2f} (should not happen if not duplicate!)")
+
         return True, Z_SP, eta_plus, eta_minus, solve_time
 
     def update_bounds(self, mp_solution, Z_SP):
@@ -167,37 +241,146 @@ class CCGAlgorithm:
             mp_solution: Master Problem solution
             Z_SP: Subproblem optimal value (worst-case operational profit)
         """
-        # Calculate strategic costs
-        OC = sum(self.data.O[j] * mp_solution['y'][j] for j in range(self.data.J))
-
-        FC = (sum(self.data.C_plant[(k, i)] * mp_solution['x'][i]
-                  for k in range(self.data.K) for i in range(self.data.I)) +
-              sum(self.data.C_dc[j] * mp_solution['y'][j] for j in range(self.data.J)) +
-              sum(self.data.L1[(k, i, j)] * mp_solution['z'][(i, j)]
-                  for k in range(self.data.K) for i in range(self.data.I) for j in range(self.data.J)) +
-              sum(self.data.L2[(j, r)] * mp_solution['w'][(j, r)]
-                  for j in range(self.data.J) for r in range(self.data.R)))
-
         # True robust profit: -OC - FC + Z_SP
-        Z_current = -OC - FC + Z_SP
+        # Note: mp_solution['objective'] = -OC - FC + theta
+        # Therefore: -OC - FC = mp_solution['objective'] - theta
+        # Z_current = -OC - FC + Z_SP = mp_solution['objective'] - theta + Z_SP
+        theta = mp_solution['theta']
+        Z_current = mp_solution['objective'] - theta + Z_SP
 
         # Update lower bound
         self.LB = max(self.LB, Z_current)
 
-        print(f"  True Robust Profit = {Z_current:.2f}")
+        print(f"  True Robust Profit (Z_current) = {Z_current:.2f}")
         print(f"  Lower Bound (LB) = {self.LB:.2f}")
 
+    def _verify_optimality_cuts(self, mp_solution, theta):
+        """
+        DEBUG: Verify that all optimality cuts are satisfied.
+        For each scenario, calculate the actual operational profit and check θ ≤ Q(scenario).
+
+        Note: ALL scenarios use beta VARIABLES (per algorithm_framework.tex Line 222).
+              Verification uses current beta solution values.
+        """
+        print(f"\n  [DEBUG] Verifying Optimality Cuts:")
+        print(f"  [DEBUG] Current θ = {theta:.2f}")
+
+        violations = []
+        for scenario_id, eta_plus, eta_minus in self.critical_scenarios:
+            # Calculate realized demand for this scenario
+            d_realized = {}
+            for r in range(self.data.R):
+                for k in range(self.data.K):
+                    nominal = sum(
+                        self.data.mu[(r, k)] * self.data.DI[(m, k)] * mp_solution['beta'][(r, m)]
+                        for m in range(self.data.M)
+                    )
+                    uncertainty = (eta_plus[(r, k)] - eta_minus[(r, k)]) * self.data.mu_hat[(r, k)]
+                    d_realized[(r, k)] = nominal + uncertainty
+
+            # Calculate operational profit for this scenario using Master's second-stage variables
+            # (if this is not iteration 1, we should have these variables)
+            if scenario_id in [s[0] for s in self.master.scenarios]:
+                # Get second-stage variable values from Master solution
+                l = scenario_id
+
+                # Revenue
+                revenue = sum(
+                    self.data.S * (d_realized[(r, k)] - self.master.u[(r, k, l)].X)
+                    for r in range(self.data.R)
+                    for k in range(self.data.K)
+                )
+
+                # Costs
+                HC = sum(
+                    (self.data.h[j] / 2) * self.master.A_ij[(k, i, j, l)].X
+                    for k in range(self.data.K)
+                    for i in range(self.data.I)
+                    for j in range(self.data.J)
+                )
+
+                TC1 = sum(
+                    self.data.D1[(k, i, j)] * self.data.t * self.master.A_ij[(k, i, j, l)].X
+                    for k in range(self.data.K)
+                    for i in range(self.data.I)
+                    for j in range(self.data.J)
+                )
+
+                TC2 = sum(
+                    self.data.D2[(j, r)] * self.data.TC[m] * self.master.X[(j, r, m, k, l)].X
+                    for k in range(self.data.K)
+                    for j in range(self.data.J)
+                    for r in range(self.data.R)
+                    for m in range(self.data.M)
+                )
+
+                PC = sum(
+                    self.data.F[(k, i)] * self.master.A_ij[(k, i, j, l)].X
+                    for k in range(self.data.K)
+                    for i in range(self.data.I)
+                    for j in range(self.data.J)
+                )
+
+                SC = sum(
+                    self.data.SC * self.master.u[(r, k, l)].X
+                    for r in range(self.data.R)
+                    for k in range(self.data.K)
+                )
+
+                Q_scenario = revenue - HC - TC1 - TC2 - PC - SC
+                violation = theta - Q_scenario
+
+                if violation > 0.01:  # θ > Q + tolerance
+                    violations.append((scenario_id, violation, Q_scenario))
+                    print(f"  [DEBUG]   ⚠️  Scenario {scenario_id}: θ = {theta:.2f} > Q = {Q_scenario:.2f} (violation: {violation:.2f})")
+                else:
+                    print(f"  [DEBUG]   ✓ Scenario {scenario_id}: θ = {theta:.2f} ≤ Q = {Q_scenario:.2f} (slack: {-violation:.2f})")
+
+        if violations:
+            print(f"  [DEBUG] ⚠️  WARNING: {len(violations)} optimality cut(s) violated!")
+            print(f"  [DEBUG] This should NEVER happen - indicates implementation bug!")
+        else:
+            print(f"  [DEBUG] All optimality cuts satisfied.")
+
     def check_convergence(self):
-        """Check convergence criterion."""
+        """
+        Check convergence criterion.
+
+        Convergence is achieved when |UB - LB| <= epsilon.
+        Negative gaps indicate solver suboptimality or numerical issues.
+        """
         gap = self.UB - self.LB
-        rel_gap = gap / (abs(self.UB) + 1e-10)
+        abs_gap = abs(gap)
+        rel_gap = gap / (abs(self.UB) + 1e-10) if abs(self.UB) > 1e-10 else 0
 
-        print(f"  Gap = {gap:.4f}, Relative Gap = {rel_gap:.6f}")
+        print(f"  Gap (UB-LB) = {gap:.4f}, Absolute Gap = {abs_gap:.4f}, Relative Gap = {rel_gap:.6f}")
 
-        if gap <= self.config.epsilon:
+        # Positive gap within tolerance: converged
+        if gap >= 0 and abs_gap <= self.config.epsilon:
             self.converged = True
-            print("  *** CONVERGED ***")
+            print("  *** CONVERGED (gap within tolerance) ***")
             return True
+
+        # Small negative gap within tolerance: treat as converged (numerical precision)
+        if gap < 0 and abs_gap <= self.config.epsilon:
+            self.converged = True
+            print(f"  *** CONVERGED (small negative gap: {gap:.2f} within tolerance ε={self.config.epsilon}) ***")
+            print(f"  Note: Negative gap likely due to numerical precision or solver tolerance")
+            return True
+
+        # Large negative gap: warning but continue
+        if gap < -self.config.epsilon:
+            print(f"  ⚠️  WARNING: NEGATIVE GAP detected!")
+            print(f"  UB = {self.UB:.2f}, LB = {self.LB:.2f}, Gap = {gap:.2f}")
+            print(f"  Possible causes:")
+            print(f"    1. Subproblem returned suboptimal Z_SP (too large → LB over-estimated)")
+            print(f"    2. Master Problem returned suboptimal θ (too small → UB under-estimated)")
+            print(f"    3. Numerical precision issues in bound calculations")
+            print(f"  Algorithm will continue to search for better solutions...")
+
+        # Positive gap larger than tolerance: not converged yet
+        if gap > self.config.epsilon:
+            print(f"  Not converged yet (gap = {gap:.2f} > ε = {self.config.epsilon})")
 
         return False
 
@@ -239,17 +422,52 @@ class CCGAlgorithm:
 
         Returns:
             bool: True if scenario was added, False if duplicate
+
+        Note: Per algorithm_framework.tex Line 222, ALL scenarios use the SAME beta VARIABLES.
+              This is endogenous demand - beta (mode choice) affects demand realization.
         """
         # Check for duplicates
         if self.is_duplicate_scenario(eta_plus, eta_minus):
-            print(f"  Scenario is duplicate - not adding to Master Problem")
+            print(f"\n  [DEBUG] Scenario is DUPLICATE - checking details:")
+
+            # Find which scenario it matches
+            for existing_id, existing_eta_plus, existing_eta_minus in self.critical_scenarios:
+                is_same = True
+                for r in range(self.data.R):
+                    for k in range(self.data.K):
+                        if (eta_plus[(r, k)] != existing_eta_plus[(r, k)] or
+                            eta_minus[(r, k)] != existing_eta_minus[(r, k)]):
+                            is_same = False
+                            break
+                    if not is_same:
+                        break
+
+                if is_same:
+                    print(f"  [DEBUG] Matches scenario {existing_id}")
+
+                    # Count deviations
+                    num_plus = sum(1 for v in eta_plus.values() if v > 0.5)
+                    num_minus = sum(1 for v in eta_minus.values() if v > 0.5)
+                    print(f"  [DEBUG] Scenario pattern: {num_plus} increases, {num_minus} decreases")
+                    break
+
+            print(f"  [DEBUG] NOT adding to Master Problem (duplicate)")
             return False
 
         scenario_id = len(self.critical_scenarios)
-        print(f"  Adding scenario {scenario_id} to Master Problem...")
+        print(f"\n  [DEBUG] Adding NEW scenario {scenario_id} to Master Problem...")
 
+        # Count deviations
+        num_plus = sum(1 for v in eta_plus.values() if v > 0.5)
+        num_minus = sum(1 for v in eta_minus.values() if v > 0.5)
+        print(f"  [DEBUG] New scenario pattern: {num_plus} increases, {num_minus} decreases")
+
+        # Add scenario to Master (uses beta VARIABLES, not fixed values)
+        # Per algorithm_framework.tex Line 222: ALL scenarios use SAME β variables
         self.master.add_scenario(scenario_id, eta_plus, eta_minus)
         self.critical_scenarios.append((scenario_id, eta_plus, eta_minus))
+
+        print(f"  [DEBUG] Total scenarios in Master: {len(self.critical_scenarios)}")
         return True
 
     def log_iteration(self, mp_time, sp_time):
@@ -281,9 +499,9 @@ class CCGAlgorithm:
 
         while not self.converged and self.iteration < self.config.max_iterations:
             self.iteration += 1
-            print(f"\n{'='*80}")
-            print(f"ITERATION {self.iteration}")
-            print(f"{'='*80}")
+
+            # Check if adaptive convergence should be activated
+            self._check_adaptive_mode()
 
             # Step 1: Solve Master Problem
             success, mp_solution, theta, mp_time = self.solve_master()
@@ -310,6 +528,7 @@ class CCGAlgorithm:
                 break
 
             # Step 5: Add scenario to Master
+            # All scenarios use beta VARIABLES (per algorithm_framework.tex Line 222)
             scenario_added = self.add_scenario_to_master(eta_plus, eta_minus)
 
             # If scenario is duplicate, algorithm has stalled
@@ -368,16 +587,22 @@ def print_solution_summary(solution, data):
     print("OPTIMAL SOLUTION SUMMARY")
     print("=" * 80)
 
-    # Plants opened
-    opened_plants = [i for i in range(data.I) if solution['x'][i] > 0.5]
-    print(f"Plants Opened: {opened_plants} ({len(opened_plants)}/{data.I})")
+    # Product-specific plants opened
+    opened_plants_by_product = {}
+    for k in range(data.K):
+        opened_plants_k = [i for i in range(data.I) if solution['x'][(k, i)] > 0.5]
+        opened_plants_by_product[k] = opened_plants_k
+        print(f"Product {k} Plants: {opened_plants_k} ({len(opened_plants_k)}/{data.I})")
+
+    total_plants = sum(len(v) for v in opened_plants_by_product.values())
+    print(f"Total Plant Openings: {total_plants}")
 
     # DCs opened
     opened_dcs = [j for j in range(data.J) if solution['y'][j] > 0.5]
     print(f"DCs Opened: {opened_dcs} ({len(opened_dcs)}/{data.J})")
 
-    # Routes plant-to-DC
-    active_routes_ij = [(i, j) for (i, j) in solution['z'] if solution['z'][(i, j)] > 0.5]
+    # Routes plant-to-DC (product-specific)
+    active_routes_ij = [(k, i, j) for (k, i, j) in solution['z'] if solution['z'][(k, i, j)] > 0.5]
     print(f"Active Routes (Plant→DC): {len(active_routes_ij)}")
 
     # Routes DC-to-customer

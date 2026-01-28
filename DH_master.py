@@ -35,9 +35,9 @@ class MasterProblem:
         self._configure_solver()
 
         # Decision variables
-        self.x = {}  # Plant opening: x[i]
+        self.x = {}  # Product-specific plant opening: x[k,i]
         self.y = {}  # DC opening: y[j]
-        self.z = {}  # Plant-DC route: z[i,j]
+        self.z = {}  # Product-specific plant-DC route: z[k,i,j]
         self.w = {}  # DC-Customer assignment: w[j,r]
         self.beta = {}  # Customer mode selection: beta[r,m]
         self.alpha = {}  # Mode-route combination: alpha[j,r,m]
@@ -69,18 +69,20 @@ class MasterProblem:
 
     def _build_variables(self):
         """Create first-stage decision variables."""
-        # Plant opening variables
-        for i in range(self.I):
-            self.x[i] = self.model.addVar(vtype=GRB.BINARY, name=f"x_{i}")
+        # Product-specific plant opening variables
+        for k in range(self.K):
+            for i in range(self.I):
+                self.x[(k, i)] = self.model.addVar(vtype=GRB.BINARY, name=f"x_{k}_{i}")
 
         # DC opening variables
         for j in range(self.J):
             self.y[j] = self.model.addVar(vtype=GRB.BINARY, name=f"y_{j}")
 
-        # Plant-DC route variables
-        for i in range(self.I):
-            for j in range(self.J):
-                self.z[(i, j)] = self.model.addVar(vtype=GRB.BINARY, name=f"z_{i}_{j}")
+        # Product-specific plant-DC route variables
+        for k in range(self.K):
+            for i in range(self.I):
+                for j in range(self.J):
+                    self.z[(k, i, j)] = self.model.addVar(vtype=GRB.BINARY, name=f"z_{k}_{i}_{j}")
 
         # DC-Customer assignment variables
         for j in range(self.J):
@@ -111,9 +113,9 @@ class MasterProblem:
         OC = gp.quicksum(self.data.O[j] * self.y[j] for j in range(self.J))
 
         # Fixed costs: FC = plant + DC + routes
-        # Plant fixed costs: Σ_k Σ_i C_plant_{ki} * x_i
+        # Plant fixed costs: Σ_k Σ_i C_plant_{ki} * x_{ki} (PRODUCT-SPECIFIC)
         plant_cost = gp.quicksum(
-            self.data.C_plant[(k, i)] * self.x[i]
+            self.data.C_plant[(k, i)] * self.x[(k, i)]
             for k in range(self.K)
             for i in range(self.I)
         )
@@ -121,9 +123,9 @@ class MasterProblem:
         # DC fixed costs: Σ_j C_dc_j * y_j
         dc_cost = gp.quicksum(self.data.C_dc[j] * self.y[j] for j in range(self.J))
 
-        # Route fixed costs plant-to-DC: Σ_k Σ_i Σ_j L1_{kij} * z_ij
+        # Route fixed costs plant-to-DC: Σ_k Σ_i Σ_j L1_{kij} * z_{kij} (PRODUCT-SPECIFIC)
         route1_cost = gp.quicksum(
-            self.data.L1[(k, i, j)] * self.z[(i, j)]
+            self.data.L1[(k, i, j)] * self.z[(k, i, j)]
             for k in range(self.K)
             for i in range(self.I)
             for j in range(self.J)
@@ -151,7 +153,7 @@ class MasterProblem:
                 name=f"single_source_r{r}"
             )
 
-        # Mode selection consistency: Σ_j alpha_jrm = w_jr, ∀j,r
+        # Mode selection consistency: Σ_m alpha_jrm = w_jr, ∀j,r
         for j in range(self.J):
             for r in range(self.R):
                 self.model.addConstr(
@@ -167,21 +169,31 @@ class MasterProblem:
                     name=f"beta_consistency_r{r}_m{m}"
                 )
 
-        # Plant opening constraints: z_ij <= x_i, ∀i,j
-        for i in range(self.I):
-            for j in range(self.J):
-                self.model.addConstr(
-                    self.z[(i, j)] <= self.x[i],
-                    name=f"plant_open_i{i}_j{j}"
-                )
+        # PRODUCT-SPECIFIC PLANT CONSTRAINTS
+        # Each product must have at least one plant opened: Σ_i x_{ki} >= 1, ∀k
+        for k in range(self.K):
+            self.model.addConstr(
+                gp.quicksum(self.x[(k, i)] for i in range(self.I)) >= 1,
+                name=f"product_plant_k{k}"
+            )
 
-        # DC opening constraints for routes: z_ij <= y_j, ∀i,j
-        for i in range(self.I):
-            for j in range(self.J):
-                self.model.addConstr(
-                    self.z[(i, j)] <= self.y[j],
-                    name=f"dc_open_route_i{i}_j{j}"
-                )
+        # Plant opening constraints: z_{kij} <= x_{ki}, ∀k,i,j
+        for k in range(self.K):
+            for i in range(self.I):
+                for j in range(self.J):
+                    self.model.addConstr(
+                        self.z[(k, i, j)] <= self.x[(k, i)],
+                        name=f"plant_open_k{k}_i{i}_j{j}"
+                    )
+
+        # DC opening constraints for routes: z_{kij} <= y_j, ∀k,i,j
+        for k in range(self.K):
+            for i in range(self.I):
+                for j in range(self.J):
+                    self.model.addConstr(
+                        self.z[(k, i, j)] <= self.y[j],
+                        name=f"dc_open_route_k{k}_i{i}_j{j}"
+                    )
 
         # DC opening constraints for customers: w_jr <= y_j, ∀j,r
         for j in range(self.J):
@@ -199,23 +211,32 @@ class MasterProblem:
             scenario_id: Unique identifier for this scenario
             eta_plus: dict {(r,k): value} of eta^+ variables
             eta_minus: dict {(r,k): value} of eta^- variables
+
+        Note: Per algorithm_framework.tex Line 222, ALL scenarios use the SAME beta VARIABLES.
+              d̃_rk^(l) = Σ_m μ_rk DI_mk β_rm + (η+_rk^(l) - η-_rk^(l)) μ̂_rk
+              This is endogenous demand: beta (mode choice) affects demand realization.
+              Master optimizes beta jointly across all scenarios.
         """
         l = scenario_id
         self.scenarios.append((l, eta_plus, eta_minus))
 
         # Calculate realized demand for this scenario
-        # d_rk^(l) = Σ_m μ_rk * DI_mk * beta_rm + (eta^+_rk - eta^-_rk) * μ̂_rk
+        # d_rk^(l) = Σ_m μ_rk * DI_mk * β_rm + (η+_rk - η-_rk) * μ̂_rk
+        # β_rm is a VARIABLE (same beta for all scenarios)
+
         d_realized = {}
         for r in range(self.R):
             for k in range(self.K):
-                # Endogenous nominal demand: Σ_m μ_rk * DI_mk * beta_rm
+                # Endogenous nominal demand: Σ_m μ_rk * DI_mk * β_rm (VARIABLES!)
                 nominal_expr = gp.quicksum(
                     self.data.mu[(r, k)] * self.data.DI[(m, k)] * self.beta[(r, m)]
                     for m in range(self.M)
                 )
-                # Uncertainty deviation: (eta^+ - eta^-) * μ̂_rk
+                # Uncertainty deviation: (η+_rk^(l) - η-_rk^(l)) * μ̂_rk
                 uncertainty = (eta_plus[(r, k)] - eta_minus[(r, k)]) * self.data.mu_hat[(r, k)]
                 d_realized[(r, k)] = nominal_expr + uncertainty
+
+        print(f"    [DEBUG] Scenario {l} added (demand uses shared beta VARIABLES)")
 
         # Add second-stage variables for this scenario
         for k in range(self.K):
@@ -296,12 +317,12 @@ class MasterProblem:
                 name=f"dc_cap_j{j}_l{l}"
             )
 
-        # Route activation plant-to-DC: A_ij^{k(l)} <= MC_j * z_ij, ∀k,i,j
+        # Route activation plant-to-DC: A_ij^{k(l)} <= MC_j * z_{kij}, ∀k,i,j (PRODUCT-SPECIFIC)
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
                     self.model.addConstr(
-                        self.A_ij[(k, i, j, l)] <= self.data.MC[j] * self.z[(i, j)],
+                        self.A_ij[(k, i, j, l)] <= self.data.MC[j] * self.z[(k, i, j)],
                         name=f"route_ij_k{k}_i{i}_j{j}_l{l}"
                     )
 
@@ -383,17 +404,39 @@ class MasterProblem:
         )
 
         # Add optimality cut
+        opt_cut_rhs = revenue - HC - TC - PC - SC
         self.model.addConstr(
-            self.theta <= revenue - HC - TC - PC - SC,
+            self.theta <= opt_cut_rhs,
             name=f"opt_cut_l{l}"
         )
 
         self.model.update()
 
+        # DEBUG: Print scenario addition details
+        print(f"    [DEBUG] Added scenario {l} to Master Problem:")
+        print(f"    [DEBUG]   - Added {self.K * self.I * self.J} A_ij variables")
+        print(f"    [DEBUG]   - Added {self.K * self.J * self.R} A_jr variables")
+        print(f"    [DEBUG]   - Added {self.R * self.K} u variables")
+        print(f"    [DEBUG]   - Added {self.J * self.R * self.M * self.K} X variables")
+        print(f"    [DEBUG]   - Added optimality cut: θ ≤ [operational profit for scenario {l}]")
+        print(f"    [DEBUG]   - Total constraints in model: {self.model.NumConstrs}")
+        print(f"    [DEBUG]   - Total variables in model: {self.model.NumVars}")
+
     def solve(self):
         """Solve the master problem."""
         self.model.optimize()
-        return self.model.Status == GRB.OPTIMAL
+        status = self.model.Status
+
+        # Accept OPTIMAL or TIME_LIMIT with solution
+        if status == GRB.OPTIMAL:
+            return True
+        elif status == GRB.TIME_LIMIT and self.model.SolCount > 0:
+            gap_pct = self.model.MIPGap * 100
+            print(f"  WARNING: Time limit reached. Using best solution found (gap: {gap_pct:.2f}%)")
+            return True
+        else:
+            print(f"  Master Problem failed to solve! Status: {status}")
+            return False
 
     def get_solution(self):
         """
@@ -402,19 +445,30 @@ class MasterProblem:
         Returns:
             dict with solution values
         """
-        if self.model.Status != GRB.OPTIMAL:
+        status = self.model.Status
+
+        # Accept solution if OPTIMAL or TIME_LIMIT with solution
+        if status == GRB.OPTIMAL or (status == GRB.TIME_LIMIT and self.model.SolCount > 0):
+            solution = {
+                'objective': self.model.ObjVal,
+                'theta': self.theta.X,
+                'x': {(k, i): self.x[(k, i)].X for k in range(self.K) for i in range(self.I)},
+                'y': {j: self.y[j].X for j in range(self.J)},
+                'z': {(k, i, j): self.z[(k, i, j)].X for k in range(self.K) for i in range(self.I) for j in range(self.J)},
+                'w': {(j, r): self.w[(j, r)].X for j in range(self.J) for r in range(self.R)},
+                'beta': {(r, m): self.beta[(r, m)].X for r in range(self.R) for m in range(self.M)},
+                'alpha': {(j, r, m): self.alpha[(j, r, m)].X
+                         for j in range(self.J) for r in range(self.R) for m in range(self.M)}
+            }
+
+            # DEBUG: Show beta values (first few)
+            print(f"  [DEBUG-MASTER] Beta values from solution (showing first 3):")
+            count = 0
+            for key, val in solution['beta'].items():
+                if val > 0.5 and count < 3:  # Only show active beta values
+                    print(f"  [DEBUG-MASTER]   beta{key} = {val:.4f}")
+                    count += 1
+
+            return solution
+        else:
             return None
-
-        solution = {
-            'objective': self.model.ObjVal,
-            'theta': self.theta.X,
-            'x': {i: self.x[i].X for i in range(self.I)},
-            'y': {j: self.y[j].X for j in range(self.J)},
-            'z': {(i, j): self.z[(i, j)].X for i in range(self.I) for j in range(self.J)},
-            'w': {(j, r): self.w[(j, r)].X for j in range(self.J) for r in range(self.R)},
-            'beta': {(r, m): self.beta[(r, m)].X for r in range(self.R) for m in range(self.M)},
-            'alpha': {(j, r, m): self.alpha[(j, r, m)].X
-                     for j in range(self.J) for r in range(self.R) for m in range(self.M)}
-        }
-
-        return solution
