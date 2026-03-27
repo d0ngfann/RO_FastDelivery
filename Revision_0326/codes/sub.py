@@ -1,5 +1,5 @@
 """
-sub.py — Subproblem (SP-Dual) Formulation
+sub.py  -  Subproblem (SP-Dual) Formulation
 
 Finds worst-case demand scenario (eta+, eta-) given fixed first-stage decisions.
 Uses dual reformulation + McCormick linearization for bilinear terms.
@@ -97,20 +97,20 @@ class Subproblem:
     def _build_variables(self):
         """Create decision variables."""
         # Dual variables
-        # pi[k,i]: Plant capacity dual (≥ 0)
+        # pi[k,i]: Plant capacity dual (>= 0)
         for k in range(self.K):
             for i in range(self.I):
                 self.pi[(k, i)] = self.model.addVar(
                     vtype=GRB.CONTINUOUS, lb=0, name=f"pi_{k}_{i}"
                 )
 
-        # sigma[j]: DC capacity dual (≥ 0)
+        # sigma[j]: DC capacity dual (>= 0)
         for j in range(self.J):
             self.sigma[j] = self.model.addVar(
                 vtype=GRB.CONTINUOUS, lb=0, name=f"sigma_{j}"
             )
 
-        # psi[k,i,j]: Route plant-DC dual (≥ 0)
+        # psi[k,i,j]: Route plant-DC dual (>= 0)
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
@@ -118,7 +118,7 @@ class Subproblem:
                         vtype=GRB.CONTINUOUS, lb=0, name=f"psi_{k}_{i}_{j}"
                     )
 
-        # phi[k,j,r]: Route DC-customer dual (≥ 0)
+        # phi[k,j,r]: Route DC-customer dual (>= 0)
         for k in range(self.K):
             for j in range(self.J):
                 for r in range(self.R):
@@ -155,7 +155,7 @@ class Subproblem:
 
         # McCormick linearization variables
         # Bounds for p: based on gamma bounds and binary eta
-        # p_plus, p_minus ∈ [gamma_L, gamma_U] when eta = 1, else 0
+        # p_plus, p_minus  in  [gamma_L, gamma_U] when eta = 1, else 0
         for r in range(self.R):
             for k in range(self.K):
                 self.p_plus[(r, k)] = self.model.addVar(
@@ -168,7 +168,7 @@ class Subproblem:
     def _build_constraints(self):
         """Build constraints (before fixing first-stage variables)."""
         # Uncertainty set constraints
-        # Budget constraint: Σ_r (eta_plus + eta_minus) <= Gamma, ∀k
+        # Budget constraint: Sum_r (eta_plus + eta_minus) <= Gamma, for all k
         for k in range(self.K):
             self.model.addConstr(
                 gp.quicksum(
@@ -178,7 +178,7 @@ class Subproblem:
                 name=f"budget_k{k}"
             )
 
-        # Mutual exclusivity: eta_plus + eta_minus <= 1, ∀r,k
+        # Mutual exclusivity: eta_plus + eta_minus <= 1, for all r,k
         for r in range(self.R):
             for k in range(self.K):
                 self.model.addConstr(
@@ -328,7 +328,7 @@ class Subproblem:
                     self.dual_feasibility_constrs.append(constr)
 
         # Dual feasibility for A_jr^k:
-        # phi[k,j,r] + gamma[r,k] - kappa[k,j] >= -Σ_m D2[j,r] * TC[m] * alpha[j,r,m]
+        # phi[k,j,r] + gamma[r,k] - kappa[k,j] >= -Sum_m D2[j,r] * TC[m] * alpha[j,r,m]
         # This RHS depends on fixed_alpha, so it changes when alpha changes
         for k in range(self.K):
             for j in range(self.J):
@@ -357,12 +357,12 @@ class Subproblem:
     def _build_objective(self):
         """Build objective function (dual objective to minimize)."""
         # Dual objective: minimize
-        # Σ_k Σ_i MP[k,i] * pi[k,i]
-        # + Σ_j MC[j] * sigma[j]
-        # + Σ_k Σ_i Σ_j MC[j] * z_ij * psi[k,i,j]
-        # + Σ_k Σ_j Σ_r MC[j] * w_jr * phi[k,j,r]
-        # + Σ_r Σ_k (Σ_m mu[r,k] * DI[m,k] * beta[r,m]) * gamma[r,k]
-        # + Σ_r Σ_k mu_hat[r,k] * (p_plus[r,k] - p_minus[r,k])
+        # Sum_k Sum_i MP[k,i] * pi[k,i]
+        # + Sum_j MC[j] * sigma[j]
+        # + Sum_k Sum_i Sum_j MC[j] * z_ij * psi[k,i,j]
+        # + Sum_k Sum_j Sum_r MC[j] * w_jr * phi[k,j,r]
+        # + Sum_r Sum_k (Sum_m mu[r,k] * DI[m,k] * beta[r,m]) * gamma[r,k]
+        # + Sum_r Sum_k mu_hat[r,k] * (p_plus[r,k] - p_minus[r,k])
 
         obj = 0
 
@@ -403,18 +403,18 @@ class Subproblem:
             for k in range(self.K)
         )
 
-        # Uncertainty term (linearized): μ̂_rk × ξ_rk where ξ = (η⁺-η⁻)×γ
+        # Uncertainty term (linearized): mu_hat_rk x xi_rk where xi = (eta+-eta-)xgamma
         obj += gp.quicksum(
             self.data.mu_hat[(r, k)] * (self.p_plus[(r, k)] - self.p_minus[(r, k)])
             for r in range(self.R)
             for k in range(self.K)
         )
 
-        # CRITICAL: Add S×μ̂×(η⁺-η⁻) term for correct minimization over η
-        # Subproblem minimizes: S×d(η) + dual_obj(η)
-        # where d(η) = d_nominal + (η⁺-η⁻)×μ̂
-        # So we need to minimize: S×(η⁺-η⁻)×μ̂ + [capacity_terms + d×γ]
-        # The S×(η⁺-η⁻)×μ̂ term must be added to the objective!
+        # CRITICAL: Add Sxmu_hatx(eta+-eta-) term for correct minimization over eta
+        # Subproblem minimizes: Sxd(eta) + dual_obj(eta)
+        # where d(eta) = d_nominal + (eta+-eta-)xmu_hat
+        # So we need to minimize: Sx(eta+-eta-)xmu_hat + [capacity_terms + dxgamma]
+        # The Sx(eta+-eta-)xmu_hat term must be added to the objective!
         obj += gp.quicksum(
             self.data.S * self.data.mu_hat[(r, k)] * (self.eta_plus[(r, k)] - self.eta_minus[(r, k)])
             for r in range(self.R)
@@ -443,7 +443,7 @@ class Subproblem:
         # This causes LB to be over-estimated, potentially leading to negative gap
         elif status == GRB.TIME_LIMIT and self.model.SolCount > 0:
             mip_gap = self.model.MIPGap * 100
-            print(f"  ⚠️  WARNING: Subproblem time limit reached!")
+            print(f"  [!]  WARNING: Subproblem time limit reached!")
             print(f"  MIP Gap: {mip_gap:.4f}%")
             print(f"  Using best solution found (may be suboptimal)")
             print(f"  Note: Z_SP may be over-estimated (minimization problem)")
@@ -476,14 +476,14 @@ class Subproblem:
                 eta_plus[(r, k)] = round(self.eta_plus[(r, k)].X)
                 eta_minus[(r, k)] = round(self.eta_minus[(r, k)].X)
 
-        # Z_SP calculation after adding S×μ̂×(η⁺-η⁻) to objective:
+        # Z_SP calculation after adding Sxmu_hatx(eta+-eta-) to objective:
         # model.ObjVal now includes:
-        #   capacity_terms + d_nominal×γ + μ̂×(η⁺-η⁻)×γ + S×μ̂×(η⁺-η⁻)
-        # Therefore: Z_SP = S×d_nominal + model.ObjVal
+        #   capacity_terms + d_nominalxgamma + mu_hatx(eta+-eta-)xgamma + Sxmu_hatx(eta+-eta-)
+        # Therefore: Z_SP = Sxd_nominal + model.ObjVal
 
         dual_obj = self.model.ObjVal
 
-        # Calculate S×d_nominal (constant part only)
+        # Calculate Sxd_nominal (constant part only)
         revenue_S_times_d_nominal = 0.0
         for r in range(self.R):
             for k in range(self.K):
@@ -493,8 +493,8 @@ class Subproblem:
                 )
                 revenue_S_times_d_nominal += self.data.S * d_nominal
 
-        # Z_SP = S×d_nominal + model.ObjVal
-        # (model.ObjVal already includes S×μ̂×(η⁺-η⁻) term now)
+        # Z_SP = Sxd_nominal + model.ObjVal
+        # (model.ObjVal already includes Sxmu_hatx(eta+-eta-) term now)
         Z_SP = revenue_S_times_d_nominal + dual_obj
 
         return Z_SP, eta_plus, eta_minus

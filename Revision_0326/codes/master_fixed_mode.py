@@ -1,5 +1,5 @@
 """
-master_fixed_mode.py — Master Problem with Fixed Transportation Mode
+master_fixed_mode.py  -  Master Problem with Fixed Transportation Mode
 
 Inherits from master.py (MasterProblem). Forces all customers to use a single mode
 by fixing alpha[j,r,m]=0 for all m != fixed_mode.

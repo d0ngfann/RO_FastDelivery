@@ -1,5 +1,5 @@
 """
-run_breakeven.py — Breakeven Analysis: TC_2 sensitivity, LD only, Optimal + FM2 = 500 runs
+run_breakeven.py  -  Breakeven Analysis: TC_2 sensitivity, LD only, Optimal + FM2 = 500 runs
 
 Tests when fast delivery (FM2) becomes unprofitable as transport cost increases.
 TC_2 in {0.20, 0.40, 0.60, 0.80, 1.00}, LD scenario, 50 seeds, 2 policies.

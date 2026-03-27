@@ -1,5 +1,5 @@
 """
-master.py — Master Problem (MP) Formulation
+master.py  -  Master Problem (MP) Formulation
 
 First-stage optimization: plant/DC opening, routing, mode selection, optimality cuts.
 Gurobi MIP model. Scenarios are added dynamically by the C&CG algorithm.
@@ -119,21 +119,21 @@ class MasterProblem:
 
     def _build_objective(self):
         """Build objective function: max -OC - FC + theta."""
-        # Ordering cost: OC = Σ_j O_j * y_j
+        # Ordering cost: OC = Sum_j O_j * y_j
         OC = gp.quicksum(self.data.O[j] * self.y[j] for j in range(self.J))
 
         # Fixed costs: FC = plant + DC + routes
-        # Plant fixed costs: Σ_k Σ_i C_plant_{ki} * x_{ki} (PRODUCT-SPECIFIC)
+        # Plant fixed costs: Sum_k Sum_i C_plant_{ki} * x_{ki} (PRODUCT-SPECIFIC)
         plant_cost = gp.quicksum(
             self.data.C_plant[(k, i)] * self.x[(k, i)]
             for k in range(self.K)
             for i in range(self.I)
         )
 
-        # DC fixed costs: Σ_j C_dc_j * y_j
+        # DC fixed costs: Sum_j C_dc_j * y_j
         dc_cost = gp.quicksum(self.data.C_dc[j] * self.y[j] for j in range(self.J))
 
-        # Route fixed costs plant-to-DC: Σ_k Σ_i Σ_j L1_{kij} * z_{kij} (PRODUCT-SPECIFIC)
+        # Route fixed costs plant-to-DC: Sum_k Sum_i Sum_j L1_{kij} * z_{kij} (PRODUCT-SPECIFIC)
         route1_cost = gp.quicksum(
             self.data.L1[(k, i, j)] * self.z[(k, i, j)]
             for k in range(self.K)
@@ -141,7 +141,7 @@ class MasterProblem:
             for j in range(self.J)
         )
 
-        # Route fixed costs DC-to-customer: Σ_j Σ_r L2_{jr} * w_jr
+        # Route fixed costs DC-to-customer: Sum_j Sum_r L2_{jr} * w_jr
         route2_cost = gp.quicksum(
             self.data.L2[(j, r)] * self.w[(j, r)]
             for j in range(self.J)
@@ -156,14 +156,14 @@ class MasterProblem:
     def _build_network_constraints(self):
         """Build network topology constraints."""
         # Single sourcing: each customer served by exactly one DC
-        # Σ_j w_jr = 1, ∀r
+        # Sum_j w_jr = 1, for all r
         for r in range(self.R):
             self.model.addConstr(
                 gp.quicksum(self.w[(j, r)] for j in range(self.J)) == 1,
                 name=f"single_source_r{r}"
             )
 
-        # Mode selection consistency: Σ_m alpha_jrm = w_jr, ∀j,r
+        # Mode selection consistency: Sum_m alpha_jrm = w_jr, for all j,r
         for j in range(self.J):
             for r in range(self.R):
                 self.model.addConstr(
@@ -171,7 +171,7 @@ class MasterProblem:
                     name=f"mode_consistency_j{j}_r{r}"
                 )
 
-        # Beta consistency: Σ_j alpha_jrm = beta_rm, ∀r,m
+        # Beta consistency: Sum_j alpha_jrm = beta_rm, for all r,m
         for r in range(self.R):
             for m in range(self.M):
                 self.model.addConstr(
@@ -180,14 +180,14 @@ class MasterProblem:
                 )
 
         # PRODUCT-SPECIFIC PLANT CONSTRAINTS
-        # Each product must have at least one plant opened: Σ_i x_{ki} >= 1, ∀k
+        # Each product must have at least one plant opened: Sum_i x_{ki} >= 1, for all k
         for k in range(self.K):
             self.model.addConstr(
                 gp.quicksum(self.x[(k, i)] for i in range(self.I)) >= 1,
                 name=f"product_plant_k{k}"
             )
 
-        # Plant opening constraints: z_{kij} <= x_{ki}, ∀k,i,j
+        # Plant opening constraints: z_{kij} <= x_{ki}, for all k,i,j
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
@@ -196,7 +196,7 @@ class MasterProblem:
                         name=f"plant_open_k{k}_i{i}_j{j}"
                     )
 
-        # DC opening constraints for routes: z_{kij} <= y_j, ∀k,i,j
+        # DC opening constraints for routes: z_{kij} <= y_j, for all k,i,j
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
@@ -205,7 +205,7 @@ class MasterProblem:
                         name=f"dc_open_route_k{k}_i{i}_j{j}"
                     )
 
-        # DC opening constraints for customers: w_jr <= y_j, ∀j,r
+        # DC opening constraints for customers: w_jr <= y_j, for all j,r
         for j in range(self.J):
             for r in range(self.R):
                 self.model.addConstr(
@@ -223,7 +223,7 @@ class MasterProblem:
             eta_minus: dict {(r,k): value} of eta^- variables
 
         Note: Per algorithm_framework.tex Line 222, ALL scenarios use the SAME beta VARIABLES.
-              d̃_rk^(l) = Σ_m μ_rk DI_mk β_rm + (η+_rk^(l) - η-_rk^(l)) μ̂_rk
+              d_tilde_rk^(l) = Sum_m mu_rk DI_mk beta_rm + (eta+_rk^(l) - eta-_rk^(l)) mu_hat_rk
               This is endogenous demand: beta (mode choice) affects demand realization.
               Master optimizes beta jointly across all scenarios.
         """
@@ -231,18 +231,18 @@ class MasterProblem:
         self.scenarios.append((l, eta_plus, eta_minus))
 
         # Calculate realized demand for this scenario
-        # d_rk^(l) = Σ_m μ_rk * DI_mk * β_rm + (η+_rk - η-_rk) * μ̂_rk
-        # β_rm is a VARIABLE (same beta for all scenarios)
+        # d_rk^(l) = Sum_m mu_rk * DI_mk * beta_rm + (eta+_rk - eta-_rk) * mu_hat_rk
+        # beta_rm is a VARIABLE (same beta for all scenarios)
 
         d_realized = {}
         for r in range(self.R):
             for k in range(self.K):
-                # Endogenous nominal demand: Σ_m μ_rk * DI_mk * β_rm (VARIABLES!)
+                # Endogenous nominal demand: Sum_m mu_rk * DI_mk * beta_rm (VARIABLES!)
                 nominal_expr = gp.quicksum(
                     self.data.mu[(r, k)] * self.data.DI[(m, k)] * self.beta[(r, m)]
                     for m in range(self.M)
                 )
-                # Uncertainty deviation: (η+_rk^(l) - η-_rk^(l)) * μ̂_rk
+                # Uncertainty deviation: (eta+_rk^(l) - eta-_rk^(l)) * mu_hat_rk
                 uncertainty = (eta_plus[(r, k)] - eta_minus[(r, k)]) * self.data.mu_hat[(r, k)]
                 d_realized[(r, k)] = nominal_expr + uncertainty
 
@@ -308,7 +308,7 @@ class MasterProblem:
                         )
 
         # Add operational constraints for this scenario
-        # Plant capacity: Σ_j A_ij^{k(l)} <= MP_ki, ∀k,i
+        # Plant capacity: Sum_j A_ij^{k(l)} <= MP_ki, for all k,i
         for k in range(self.K):
             for i in range(self.I):
                 self.model.addConstr(
@@ -316,7 +316,7 @@ class MasterProblem:
                     name=f"plant_cap_k{k}_i{i}_l{l}"
                 )
 
-        # DC capacity: Σ_k Σ_i A_ij^{k(l)} <= MC_j, ∀j
+        # DC capacity: Sum_k Sum_i A_ij^{k(l)} <= MC_j, for all j
         for j in range(self.J):
             self.model.addConstr(
                 gp.quicksum(
@@ -327,7 +327,7 @@ class MasterProblem:
                 name=f"dc_cap_j{j}_l{l}"
             )
 
-        # Route activation plant-to-DC: A_ij^{k(l)} <= MC_j * z_{kij}, ∀k,i,j (PRODUCT-SPECIFIC)
+        # Route activation plant-to-DC: A_ij^{k(l)} <= MC_j * z_{kij}, for all k,i,j (PRODUCT-SPECIFIC)
         for k in range(self.K):
             for i in range(self.I):
                 for j in range(self.J):
@@ -336,7 +336,7 @@ class MasterProblem:
                         name=f"route_ij_k{k}_i{i}_j{j}_l{l}"
                     )
 
-        # Route activation DC-to-customer: A_jr^{k(l)} <= MC_j * w_jr, ∀k,j,r
+        # Route activation DC-to-customer: A_jr^{k(l)} <= MC_j * w_jr, for all k,j,r
         for k in range(self.K):
             for j in range(self.J):
                 for r in range(self.R):
@@ -345,7 +345,7 @@ class MasterProblem:
                         name=f"route_jr_k{k}_j{j}_r{r}_l{l}"
                     )
 
-        # Demand satisfaction: Σ_j A_jr^{k(l)} + u_rk^{(l)} = d_rk^{(l)}, ∀k,r
+        # Demand satisfaction: Sum_j A_jr^{k(l)} + u_rk^{(l)} = d_rk^{(l)}, for all k,r
         for k in range(self.K):
             for r in range(self.R):
                 self.model.addConstr(
@@ -354,7 +354,7 @@ class MasterProblem:
                     name=f"demand_k{k}_r{r}_l{l}"
                 )
 
-        # Flow balance at DC: Σ_i A_ij^{k(l)} = Σ_r A_jr^{k(l)}, ∀k,j
+        # Flow balance at DC: Sum_i A_ij^{k(l)} = Sum_r A_jr^{k(l)}, for all k,j
         for k in range(self.K):
             for j in range(self.J):
                 self.model.addConstr(
@@ -364,14 +364,14 @@ class MasterProblem:
                 )
 
         # Add optimality cut: theta <= Revenue - HC - TC - PC - SC
-        # Revenue = Σ_r Σ_k S * (d_rk - u_rk)
+        # Revenue = Sum_r Sum_k S * (d_rk - u_rk)
         revenue = gp.quicksum(
             self.data.S * (d_realized[(r, k)] - self.u[(r, k, l)])
             for r in range(self.R)
             for k in range(self.K)
         )
 
-        # Holding cost: HC = Σ_k Σ_i Σ_j (h_j/2) * A_ij^{k(l)}
+        # Holding cost: HC = Sum_k Sum_i Sum_j (h_j/2) * A_ij^{k(l)}
         HC = gp.quicksum(
             (self.data.h[j] / 2) * self.A_ij[(k, i, j, l)]
             for k in range(self.K)
@@ -379,7 +379,7 @@ class MasterProblem:
             for j in range(self.J)
         )
 
-        # Transportation cost (plant-to-DC): Σ_k Σ_i Σ_j D1_kij * t * A_ij^{k(l)}
+        # Transportation cost (plant-to-DC): Sum_k Sum_i Sum_j D1_kij * t * A_ij^{k(l)}
         TC1 = gp.quicksum(
             self.data.D1[(k, i, j)] * self.data.t * self.A_ij[(k, i, j, l)]
             for k in range(self.K)
@@ -387,7 +387,7 @@ class MasterProblem:
             for j in range(self.J)
         )
 
-        # Transportation cost (DC-to-customer): Σ_k Σ_j Σ_r Σ_m D2_jr * TC_m * X_jrm^{k(l)}
+        # Transportation cost (DC-to-customer): Sum_k Sum_j Sum_r Sum_m D2_jr * TC_m * X_jrm^{k(l)}
         TC2 = gp.quicksum(
             self.data.D2[(j, r)] * self.data.TC[m] * self.X[(j, r, m, k, l)]
             for k in range(self.K)
@@ -398,7 +398,7 @@ class MasterProblem:
 
         TC = TC1 + TC2
 
-        # Production cost: PC = Σ_k Σ_i Σ_j F_ki * A_ij^{k(l)}
+        # Production cost: PC = Sum_k Sum_i Sum_j F_ki * A_ij^{k(l)}
         PC = gp.quicksum(
             self.data.F[(k, i)] * self.A_ij[(k, i, j, l)]
             for k in range(self.K)
@@ -406,7 +406,7 @@ class MasterProblem:
             for j in range(self.J)
         )
 
-        # Shortage cost: SC = Σ_r Σ_k SC * u_rk^{(l)}
+        # Shortage cost: SC = Sum_r Sum_k SC * u_rk^{(l)}
         SC = gp.quicksum(
             self.data.SC * self.u[(r, k, l)]
             for r in range(self.R)
@@ -428,7 +428,7 @@ class MasterProblem:
         print(f"    [DEBUG]   - Added {self.K * self.J * self.R} A_jr variables")
         print(f"    [DEBUG]   - Added {self.R * self.K} u variables")
         print(f"    [DEBUG]   - Added {self.J * self.R * self.M * self.K} X variables")
-        print(f"    [DEBUG]   - Added optimality cut: θ ≤ [operational profit for scenario {l}]")
+        print(f"    [DEBUG]   - Added optimality cut: theta <= [operational profit for scenario {l}]")
         print(f"    [DEBUG]   - Total constraints in model: {self.model.NumConstrs}")
         print(f"    [DEBUG]   - Total variables in model: {self.model.NumVars}")
 
@@ -492,7 +492,7 @@ class MasterProblem:
         Mode 0 (slow) typically has no limit (D_bar[0] = inf).
 
         Args:
-            D_bar: dict {m: max_distance} — maximum coverage distance per mode
+            D_bar: dict {m: max_distance}  -  maximum coverage distance per mode
         """
         count = 0
         for j in range(self.J):

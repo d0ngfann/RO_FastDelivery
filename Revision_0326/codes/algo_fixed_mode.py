@@ -1,5 +1,5 @@
 """
-algo_fixed_mode.py — C&CG Algorithm with Fixed Mode
+algo_fixed_mode.py  -  C&CG Algorithm with Fixed Mode
 
 Inherits from algo.py (CCGAlgorithm). Overrides initialize() to use
 MasterProblemFixedMode instead of MasterProblem. Everything else (loop, SP, bounds) is inherited.
@@ -40,16 +40,16 @@ class CCGAlgorithmFixedMode(CCGAlgorithm):
         print(f"Problem: K={self.data.K}, I={self.data.I}, J={self.data.J}, "
               f"R={self.data.R}, M={self.data.M}")
         print(f"FIXED MODE: {self.fixed_mode}")
-        print(f"Uncertainty Budget: Γ = {self.config.Gamma}")
-        print(f"Convergence Tolerance: ε = {self.config.epsilon}")
+        print(f"Uncertainty Budget: Gamma = {self.config.Gamma}")
+        print(f"Convergence Tolerance: epsilon = {self.config.epsilon}")
         print("=" * 80)
 
         # Create Master Problem with FIXED MODE
         print("Creating Master Problem (FIXED MODE)...")
         self.master = MasterProblemFixedMode(self.data, self.config, self.fixed_mode)
 
-        # Add nominal scenario (η = 0)
-        print("Adding nominal scenario (η = 0)...")
+        # Add nominal scenario (eta = 0)
+        print("Adding nominal scenario (eta = 0)...")
         eta_plus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
         eta_minus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
         self.master.add_scenario(scenario_id=0, eta_plus=eta_plus_nominal, eta_minus=eta_minus_nominal)
@@ -88,11 +88,11 @@ def print_solution_summary_fixed_mode(solution, data, fixed_mode):
 
     # Routes plant-to-DC (product-specific)
     active_routes_ij = [(k, i, j) for (k, i, j) in solution['z'] if solution['z'][(k, i, j)] > 0.5]
-    print(f"Active Routes (Plant→DC): {len(active_routes_ij)}")
+    print(f"Active Routes (Plant->DC): {len(active_routes_ij)}")
 
     # Routes DC-to-customer
     active_routes_jr = [(j, r) for (j, r) in solution['w'] if solution['w'][(j, r)] > 0.5]
-    print(f"Active Routes (DC→Customer): {len(active_routes_jr)}")
+    print(f"Active Routes (DC->Customer): {len(active_routes_jr)}")
 
     # Mode distribution (should all be fixed_mode)
     mode_counts = [0] * data.M
@@ -103,15 +103,15 @@ def print_solution_summary_fixed_mode(solution, data, fixed_mode):
 
     print(f"Transportation Modes (FIXED={fixed_mode}): ", end="")
     for m in range(data.M):
-        marker = " ★" if m == fixed_mode else ""
+        marker = " *" if m == fixed_mode else ""
         print(f"Mode {m}: {mode_counts[m]} customers{marker}", end="  ")
     print()
 
     # Verify all customers use fixed mode
     if mode_counts[fixed_mode] == data.R:
-        print(f"✓ All {data.R} customers correctly use Mode {fixed_mode}")
+        print(f"OK All {data.R} customers correctly use Mode {fixed_mode}")
     else:
-        print(f"⚠️  WARNING: Expected all {data.R} customers on Mode {fixed_mode}, "
+        print(f"[!]  WARNING: Expected all {data.R} customers on Mode {fixed_mode}, "
               f"but got {mode_counts[fixed_mode]}")
 
     print("=" * 80)

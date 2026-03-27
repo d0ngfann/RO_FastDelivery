@@ -1,5 +1,5 @@
 """
-main_fixed_mode.py — Main Entry Point (Fixed Mode Policies: FM0/FM1/FM2)
+main_fixed_mode.py  -  Main Entry Point (Fixed Mode Policies: FM0/FM1/FM2)
 
 Runs C&CG with a fixed transportation mode for all customers.
 Used to compute FM0, FM1, FM2 baselines for Value of Flexibility analysis.
@@ -41,7 +41,7 @@ def run_single_gamma_fixed_mode(data, config, gamma, fixed_mode, coverage_thresh
         dict: Results from C&CG algorithm (with added facility information)
     """
     print("\n" + "=" * 80)
-    print(f"RUNNING C&CG FOR Γ = {gamma} (FIXED MODE = {fixed_mode})")
+    print(f"RUNNING C&CG FOR Gamma = {gamma} (FIXED MODE = {fixed_mode})")
     print("=" * 80)
 
     # Set gamma

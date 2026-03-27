@@ -1,5 +1,5 @@
 """
-run_exp2.py — Experiment 2: R=200, Gamma sensitivity, 4 policies x 4 DI x 50 seeds x 5 Gamma = 4,000 runs
+run_exp2.py  -  Experiment 2: R=200, Gamma sensitivity, 4 policies x 4 DI x 50 seeds x 5 Gamma = 4,000 runs
 
 Gamma sensitivity at larger scale with new DI base and epsilon=100.
 Results saved to ../result/exp2/

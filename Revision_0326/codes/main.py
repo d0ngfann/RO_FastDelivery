@@ -1,5 +1,5 @@
 """
-main.py — Main Entry Point (Optimal Policy)
+main.py  -  Main Entry Point (Optimal Policy)
 
 Runs C&CG for the Optimal policy (free mode selection).
 Supports single gamma run or full sensitivity analysis.
@@ -41,7 +41,7 @@ def run_single_gamma(data, config, gamma, coverage_thresholds=None):
         dict: Results from C&CG algorithm (with added facility information)
     """
     print("\n" + "=" * 80)
-    print(f"RUNNING C&CG FOR Γ = {gamma}")
+    print(f"RUNNING C&CG FOR Gamma = {gamma}")
     print("=" * 80)
 
     # Set gamma
@@ -169,7 +169,7 @@ def run_sensitivity_analysis(instance_type='toy', gamma_values=None):
             print(f"\nIntermediate results saved to {temp_file}")
 
         except Exception as e:
-            print(f"\nERROR: Failed to run Γ = {gamma}")
+            print(f"\nERROR: Failed to run Gamma = {gamma}")
             print(f"Exception: {str(e)}")
             import traceback
             traceback.print_exc()
@@ -232,7 +232,7 @@ def plot_sensitivity_results(df_results, instance_type='toy'):
         # Plot 1: Optimal Value vs Gamma
         ax1 = axes[0, 0]
         ax1.plot(df_valid['Gamma'], df_valid['Optimal_Value'], marker='o', linewidth=2)
-        ax1.set_xlabel('Uncertainty Budget (Γ)', fontsize=12)
+        ax1.set_xlabel('Uncertainty Budget (Gamma)', fontsize=12)
         ax1.set_ylabel('Optimal Objective Value', fontsize=12)
         ax1.set_title('Robust Profit vs Uncertainty Budget', fontsize=14, fontweight='bold')
         ax1.grid(True, alpha=0.3)
@@ -240,7 +240,7 @@ def plot_sensitivity_results(df_results, instance_type='toy'):
         # Plot 2: Number of Scenarios vs Gamma
         ax2 = axes[0, 1]
         ax2.plot(df_valid['Gamma'], df_valid['Num_Scenarios'], marker='s', linewidth=2, color='green')
-        ax2.set_xlabel('Uncertainty Budget (Γ)', fontsize=12)
+        ax2.set_xlabel('Uncertainty Budget (Gamma)', fontsize=12)
         ax2.set_ylabel('Number of Critical Scenarios', fontsize=12)
         ax2.set_title('Critical Scenarios vs Uncertainty Budget', fontsize=14, fontweight='bold')
         ax2.grid(True, alpha=0.3)
@@ -248,7 +248,7 @@ def plot_sensitivity_results(df_results, instance_type='toy'):
         # Plot 3: Iterations vs Gamma
         ax3 = axes[1, 0]
         ax3.plot(df_valid['Gamma'], df_valid['Iterations'], marker='^', linewidth=2, color='orange')
-        ax3.set_xlabel('Uncertainty Budget (Γ)', fontsize=12)
+        ax3.set_xlabel('Uncertainty Budget (Gamma)', fontsize=12)
         ax3.set_ylabel('Number of Iterations', fontsize=12)
         ax3.set_title('Convergence Iterations vs Uncertainty Budget', fontsize=14, fontweight='bold')
         ax3.grid(True, alpha=0.3)
@@ -256,7 +256,7 @@ def plot_sensitivity_results(df_results, instance_type='toy'):
         # Plot 4: Total Time vs Gamma
         ax4 = axes[1, 1]
         ax4.plot(df_valid['Gamma'], df_valid['Total_Time'], marker='d', linewidth=2, color='red')
-        ax4.set_xlabel('Uncertainty Budget (Γ)', fontsize=12)
+        ax4.set_xlabel('Uncertainty Budget (Gamma)', fontsize=12)
         ax4.set_ylabel('Total Time (seconds)', fontsize=12)
         ax4.set_title('Computation Time vs Uncertainty Budget', fontsize=14, fontweight='bold')
         ax4.grid(True, alpha=0.3)
@@ -356,7 +356,7 @@ def main():
 
         if args.di_func == 'linear':
             # Linear DI: recalculate from stored k_params using linear function
-            # DI_m = 1 + 0.3 * kappa * m (anchored to same endpoint as exponential at m=2, kappa=1 → 1.60)
+            # DI_m = 1 + 0.3 * kappa * m (anchored to same endpoint as exponential at m=2, kappa=1 -> 1.60)
             from data_gen import generate_DI_vector_linear
             print(f"  Using LINEAR DI function (robustness check)")
             for k_idx in range(config.K):

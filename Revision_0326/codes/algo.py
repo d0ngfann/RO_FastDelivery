@@ -1,5 +1,5 @@
 """
-algo.py — C&CG Algorithm Orchestration
+algo.py  -  C&CG Algorithm Orchestration
 
 Main loop: iterates between Master Problem and Subproblem until |UB - LB| <= epsilon.
 Manages bounds, convergence checking, scenario addition, and time limits.
@@ -9,10 +9,10 @@ Used by: main.py (creates CCGAlgorithm and calls run())
 Extended by: algo_fixed_mode.py (overrides initialize() to use MasterProblemFixedMode)
 
 C&CG loop:
-  1. Solve MP → get first-stage solution + theta → update UB
-  2. Solve SP → get worst-case scenario + Z_SP → update LB
+  1. Solve MP -> get first-stage solution + theta -> update UB
+  2. Solve SP -> get worst-case scenario + Z_SP -> update LB
   3. Check convergence (|UB - LB| <= epsilon=100)
-  4. Add new scenario to MP → repeat
+  4. Add new scenario to MP -> repeat
 """
 
 import time
@@ -80,16 +80,16 @@ class CCGAlgorithm:
         print("=" * 80)
         print(f"Problem: K={self.data.K}, I={self.data.I}, J={self.data.J}, "
               f"R={self.data.R}, M={self.data.M}")
-        print(f"Uncertainty Budget: Γ = {self.config.Gamma}")
-        print(f"Convergence Tolerance: ε = {self.config.epsilon}")
+        print(f"Uncertainty Budget: Gamma = {self.config.Gamma}")
+        print(f"Convergence Tolerance: epsilon = {self.config.epsilon}")
         print("=" * 80)
 
         # Create Master Problem
         print("Creating Master Problem...")
         self.master = MasterProblem(self.data, self.config)
 
-        # Add nominal scenario (η = 0)
-        print("Adding nominal scenario (η = 0)...")
+        # Add nominal scenario (eta = 0)
+        print("Adding nominal scenario (eta = 0)...")
         eta_plus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
         eta_minus_nominal = {(r, k): 0 for r in range(self.data.R) for k in range(self.data.K)}
         # All scenarios use beta VARIABLES (per algorithm_framework.tex Line 222)
@@ -132,7 +132,7 @@ class CCGAlgorithm:
         self.UB = solution['objective']
 
         print(f"  Master solved in {solve_time:.2f}s")
-        print(f"  Master Objective (UB) = {solution['objective']:.2f}, θ = {theta:.2f}")
+        print(f"  Master Objective (UB) = {solution['objective']:.2f}, theta = {theta:.2f}")
         print(f"  Upper Bound (UB) = {self.UB:.2f}")
 
         # DEBUG: Verify optimality cuts
@@ -165,7 +165,7 @@ class CCGAlgorithm:
 
             # Special handling for unbounded case (rare numerical issue)
             if status == GRB.UNBOUNDED:
-                print("\n  ⚠️  WARNING: Subproblem unbounded (rare numerical issue)")
+                print("\n  [!]  WARNING: Subproblem unbounded (rare numerical issue)")
                 print("  This may indicate degenerate first-stage solution")
                 print("  Possible causes:")
                 print("    - Master solution has many near-zero alpha values")
@@ -196,7 +196,7 @@ class CCGAlgorithm:
         print(f"\n  [DEBUG] Z_SP Calculation:")
         dual_obj = self.subproblem.model.ObjVal
 
-        # Calculate S×d_nominal
+        # Calculate Sxd_nominal
         revenue_S_times_d_nominal = 0.0
         for r in range(self.data.R):
             for k in range(self.data.K):
@@ -206,17 +206,17 @@ class CCGAlgorithm:
                 )
                 revenue_S_times_d_nominal += self.data.S * d_nominal
 
-        print(f"  [DEBUG]   Dual objective (Gurobi, includes S×μ̂×(η⁺-η⁻)) = {dual_obj:.2f}")
-        print(f"  [DEBUG]   S×d_nominal = {revenue_S_times_d_nominal:.2f}")
-        print(f"  [DEBUG]   Z_SP = S×d_nominal + dual_obj = {revenue_S_times_d_nominal:.2f} + {dual_obj:.2f} = {Z_SP:.2f}")
-        print(f"  [DEBUG]   Current θ from Master = {mp_solution['theta']:.2f}")
+        print(f"  [DEBUG]   Dual objective (Gurobi, includes Sxmu_hatx(eta+-eta-)) = {dual_obj:.2f}")
+        print(f"  [DEBUG]   Sxd_nominal = {revenue_S_times_d_nominal:.2f}")
+        print(f"  [DEBUG]   Z_SP = Sxd_nominal + dual_obj = {revenue_S_times_d_nominal:.2f} + {dual_obj:.2f} = {Z_SP:.2f}")
+        print(f"  [DEBUG]   Current theta from Master = {mp_solution['theta']:.2f}")
 
         if Z_SP > mp_solution['theta']:
             gap_sp = Z_SP - mp_solution['theta']
-            print(f"  [DEBUG]   ✓ Z_SP > θ by {gap_sp:.2f} (cut will improve θ)")
+            print(f"  [DEBUG]   OK Z_SP > theta by {gap_sp:.2f} (cut will improve theta)")
         else:
             gap_sp = mp_solution['theta'] - Z_SP
-            print(f"  [DEBUG]   ⚠️  Z_SP ≤ θ by {gap_sp:.2f} (should not happen if not duplicate!)")
+            print(f"  [DEBUG]   [!]  Z_SP <= theta by {gap_sp:.2f} (should not happen if not duplicate!)")
 
         return True, Z_SP, eta_plus, eta_minus, solve_time
 
@@ -244,13 +244,13 @@ class CCGAlgorithm:
     def _verify_optimality_cuts(self, mp_solution, theta):
         """
         DEBUG: Verify that all optimality cuts are satisfied.
-        For each scenario, calculate the actual operational profit and check θ ≤ Q(scenario).
+        For each scenario, calculate the actual operational profit and check theta <= Q(scenario).
 
         Note: ALL scenarios use beta VARIABLES (per algorithm_framework.tex Line 222).
               Verification uses current beta solution values.
         """
         print(f"\n  [DEBUG] Verifying Optimality Cuts:")
-        print(f"  [DEBUG] Current θ = {theta:.2f}")
+        print(f"  [DEBUG] Current theta = {theta:.2f}")
 
         violations = []
         for scenario_id, eta_plus, eta_minus in self.critical_scenarios:
@@ -317,14 +317,14 @@ class CCGAlgorithm:
                 Q_scenario = revenue - HC - TC1 - TC2 - PC - SC
                 violation = theta - Q_scenario
 
-                if violation > 0.01:  # θ > Q + tolerance
+                if violation > 0.01:  # theta > Q + tolerance
                     violations.append((scenario_id, violation, Q_scenario))
-                    print(f"  [DEBUG]   ⚠️  Scenario {scenario_id}: θ = {theta:.2f} > Q = {Q_scenario:.2f} (violation: {violation:.2f})")
+                    print(f"  [DEBUG]   [!]  Scenario {scenario_id}: theta = {theta:.2f} > Q = {Q_scenario:.2f} (violation: {violation:.2f})")
                 else:
-                    print(f"  [DEBUG]   ✓ Scenario {scenario_id}: θ = {theta:.2f} ≤ Q = {Q_scenario:.2f} (slack: {-violation:.2f})")
+                    print(f"  [DEBUG]   OK Scenario {scenario_id}: theta = {theta:.2f} <= Q = {Q_scenario:.2f} (slack: {-violation:.2f})")
 
         if violations:
-            print(f"  [DEBUG] ⚠️  WARNING: {len(violations)} optimality cut(s) violated!")
+            print(f"  [DEBUG] [!]  WARNING: {len(violations)} optimality cut(s) violated!")
             print(f"  [DEBUG] This should NEVER happen - indicates implementation bug!")
         else:
             print(f"  [DEBUG] All optimality cuts satisfied.")
@@ -351,23 +351,23 @@ class CCGAlgorithm:
         # Small negative gap within tolerance: treat as converged (numerical precision)
         if gap < 0 and abs_gap <= self.config.epsilon:
             self.converged = True
-            print(f"  *** CONVERGED (small negative gap: {gap:.2f} within tolerance ε={self.config.epsilon}) ***")
+            print(f"  *** CONVERGED (small negative gap: {gap:.2f} within tolerance epsilon={self.config.epsilon}) ***")
             print(f"  Note: Negative gap likely due to numerical precision or solver tolerance")
             return True
 
         # Large negative gap: warning but continue
         if gap < -self.config.epsilon:
-            print(f"  ⚠️  WARNING: NEGATIVE GAP detected!")
+            print(f"  [!]  WARNING: NEGATIVE GAP detected!")
             print(f"  UB = {self.UB:.2f}, LB = {self.LB:.2f}, Gap = {gap:.2f}")
             print(f"  Possible causes:")
-            print(f"    1. Subproblem returned suboptimal Z_SP (too large → LB over-estimated)")
-            print(f"    2. Master Problem returned suboptimal θ (too small → UB under-estimated)")
+            print(f"    1. Subproblem returned suboptimal Z_SP (too large -> LB over-estimated)")
+            print(f"    2. Master Problem returned suboptimal theta (too small -> UB under-estimated)")
             print(f"    3. Numerical precision issues in bound calculations")
             print(f"  Algorithm will continue to search for better solutions...")
 
         # Positive gap larger than tolerance: not converged yet
         if gap > self.config.epsilon:
-            print(f"  Not converged yet (gap = {gap:.2f} > ε = {self.config.epsilon})")
+            print(f"  Not converged yet (gap = {gap:.2f} > epsilon = {self.config.epsilon})")
 
         return False
 
@@ -450,7 +450,7 @@ class CCGAlgorithm:
         print(f"  [DEBUG] New scenario pattern: {num_plus} increases, {num_minus} decreases")
 
         # Add scenario to Master (uses beta VARIABLES, not fixed values)
-        # Per algorithm_framework.tex Line 222: ALL scenarios use SAME β variables
+        # Per algorithm_framework.tex Line 222: ALL scenarios use SAME beta variables
         self.master.add_scenario(scenario_id, eta_plus, eta_minus)
         self.critical_scenarios.append((scenario_id, eta_plus, eta_minus))
 
@@ -604,11 +604,11 @@ def print_solution_summary(solution, data):
 
     # Routes plant-to-DC (product-specific)
     active_routes_ij = [(k, i, j) for (k, i, j) in solution['z'] if solution['z'][(k, i, j)] > 0.5]
-    print(f"Active Routes (Plant→DC): {len(active_routes_ij)}")
+    print(f"Active Routes (Plant->DC): {len(active_routes_ij)}")
 
     # Routes DC-to-customer
     active_routes_jr = [(j, r) for (j, r) in solution['w'] if solution['w'][(j, r)] > 0.5]
-    print(f"Active Routes (DC→Customer): {len(active_routes_jr)}")
+    print(f"Active Routes (DC->Customer): {len(active_routes_jr)}")
 
     # Mode distribution
     mode_counts = [0] * data.M

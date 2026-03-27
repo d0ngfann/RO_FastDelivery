@@ -1,5 +1,5 @@
 """
-data_gen.py — Data Generation & Utilities
+data_gen.py  -  Data Generation & Utilities
 
 Generates synthetic supply chain data (costs, capacities, demands, coordinates, distances).
 Also contains DI functions and coverage threshold computation.
@@ -114,9 +114,9 @@ class SupplyChainData:
         print(f"\nDemand (only non-zero entries):")
         nonzero_mu = [v for v in self.mu.values() if v > 0]
         nonzero_mu_hat = [v for v in self.mu_hat.values() if v > 0]
-        print(f"  Nominal (μ): min={min(nonzero_mu):.2f}, "
+        print(f"  Nominal (mu): min={min(nonzero_mu):.2f}, "
               f"max={max(nonzero_mu):.2f}, count={len(nonzero_mu)}")
-        print(f"  Deviation (μ̂): min={min(nonzero_mu_hat):.2f}, "
+        print(f"  Deviation (mu_hat): min={min(nonzero_mu_hat):.2f}, "
               f"max={max(nonzero_mu_hat):.2f}")
         print(f"\nCosts:")
         print(f"  Plant fixed cost: min={min(self.C_plant.values()):.0f}, "
@@ -144,7 +144,7 @@ def generate_coordinates(n, grid_size, seed=None, mode='uniform'):
 
     Args:
         n: Number of points
-        grid_size: Size of the grid (points in [0, grid_size] × [0, grid_size])
+        grid_size: Size of the grid (points in [0, grid_size] x [0, grid_size])
         seed: Random seed for reproducibility
         mode: 'uniform', 'gaussian', or 'donut'
 
@@ -235,7 +235,7 @@ def generate_DI_vector(k, M=3):
     """
     Generate DI vector using the formula: DI_m = base^(k*m)
 
-    Base = sqrt(1.6) ≈ 1.265, calibrated to Marino & Zotteri (2018):
+    Base = sqrt(1.6) ~ 1.265, calibrated to Marino & Zotteri (2018):
     At HD max (k=1, m=2): DI = 1.60 (+60% demand increase),
     matching the empirical upper bound.
 
@@ -247,7 +247,7 @@ def generate_DI_vector(k, M=3):
         list: DI values for each mode [mode_0, mode_1, ..., mode_M-1]
     """
     import math
-    base = math.sqrt(1.6)  # ≈ 1.2649
+    base = math.sqrt(1.6)  # ~ 1.2649
     return [base ** (k * m) for m in range(M)]
 
 
@@ -446,7 +446,7 @@ def generate_supply_chain_data(config: ProblemConfig, seed=42):
         for k in range(K):
             data.s_rk[(r, k)] = int(s_matrix[r, k])
 
-    # Nominal demand μ_{rk} - only non-zero where s_rk = 1
+    # Nominal demand mu_{rk} - only non-zero where s_rk = 1
     for r in range(R):
         for k in range(K):
             if data.s_rk[(r, k)] == 1:
@@ -456,7 +456,7 @@ def generate_supply_chain_data(config: ProblemConfig, seed=42):
                 # No demand for this product
                 data.mu[(r, k)] = 0.0
 
-    # Demand deviation μ̂_{rk} using min(μ, U[4,10]) instead of percentage
+    # Demand deviation mu_hat_{rk} using min(mu, U[4,10]) instead of percentage
     for r in range(R):
         for k in range(K):
             if data.s_rk[(r, k)] == 1:

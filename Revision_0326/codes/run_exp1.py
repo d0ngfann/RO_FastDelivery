@@ -1,5 +1,5 @@
 """
-run_exp1.py — Experiment 1: R=50, Gamma=10, 4 policies x 4 DI x 50 seeds = 800 runs
+run_exp1.py  -  Experiment 1: R=50, Gamma=10, 4 policies x 4 DI x 50 seeds = 800 runs
 
 Base re-run with new DI base (sqrt(1.6)) and epsilon=100.
 Results saved to ../result/exp1/

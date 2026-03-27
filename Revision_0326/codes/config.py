@@ -1,5 +1,5 @@
 """
-config.py — Configuration & Parameters
+config.py  -  Configuration & Parameters
 
 Problem dimensions, solver settings, cost parameters for the robust supply chain model.
 All other modules import from this file.
@@ -89,14 +89,14 @@ class ProblemConfig:
         self.save_results = True
 
     def set_gamma(self, gamma_value):
-        """Set the uncertainty budget Γ_k (same for all products)."""
+        """Set the uncertainty budget Gamma_k (same for all products)."""
         if gamma_value < 0 or gamma_value > self.R:
             raise ValueError(f"Gamma must be in [0, {self.R}]")
         self.Gamma = gamma_value
 
     def __repr__(self):
         return (f"ProblemConfig(K={self.K}, I={self.I}, J={self.J}, "
-                f"R={self.R}, M={self.M}, Γ={self.Gamma})")
+                f"R={self.R}, M={self.M}, Gamma={self.Gamma})")
 
 
 class DataParameters:
@@ -146,9 +146,9 @@ class DataParameters:
     TC_modes = [0.05, 0.10, 0.20]  # per unit distance
 
     # Demand increase factors by mode: DI_{mk}
-    # Faster delivery → higher demand
-    # Shape: (M, K) - mode × product
-    # Base = sqrt(1.6) ≈ 1.265, calibrated to Marino & Zotteri (2018)
+    # Faster delivery -> higher demand
+    # Shape: (M, K) - mode x product
+    # Base = sqrt(1.6) ~ 1.265, calibrated to Marino & Zotteri (2018)
     DI_base = [
         [1.0, 1.0, 1.0],    # Mode 0: no increase
         [1.265, 1.265, 1.265],  # Mode 1: ~27% increase (at kappa=1)
@@ -165,11 +165,11 @@ class DataParameters:
     MC_max = 1800   # Increased 2x from 900, reduced variability (20% vs 125%)
 
     # Demand parameters
-    # Nominal demand: μ_{rk} - actual generation in data_gen.py uses 10*U[0.8, 3.5] = [8, 35]
+    # Nominal demand: mu_{rk} - actual generation in data_gen.py uses 10*U[0.8, 3.5] = [8, 35]
     mu_min = 8.0
     mu_max = 35.0
 
-    # Demand deviation (maximum uncertainty): μ̂_{rk}
+    # Demand deviation (maximum uncertainty): mu_hat_{rk}
     # As a fraction of nominal demand
     mu_hat_factor_min = 0.2  # 20% of nominal
     mu_hat_factor_max = 0.5  # 50% of nominal
@@ -185,7 +185,7 @@ class DataParameters:
 
     @classmethod
     def get_DI_matrix(cls, M, K):
-        """Get demand increase factors matrix (M × K)."""
+        """Get demand increase factors matrix (M x K)."""
         import numpy as np
         if M <= len(cls.DI_base) and K <= len(cls.DI_base[0]):
             # Extract the submatrix from nested list
@@ -195,7 +195,7 @@ class DataParameters:
             # Create default matrix
             DI = np.ones((M, K))
             for m in range(M):
-                # Higher mode → higher demand increase
+                # Higher mode -> higher demand increase
                 factor = 1.0 + 0.25 * m
                 DI[m, :] = factor
             return DI

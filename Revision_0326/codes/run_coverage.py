@@ -1,5 +1,5 @@
 """
-run_coverage.py — Service Coverage SA: 3 coverage x 10 seeds x 4 DI x 4 policies = 480 runs
+run_coverage.py  -  Service Coverage SA: 3 coverage x 10 seeds x 4 DI x 4 policies = 480 runs
 
 Tests how distance-based service coverage constraints affect VoF.
 Coverage scenarios: tight (25/50th pctl), moderate (50/75th), relaxed (75/90th).

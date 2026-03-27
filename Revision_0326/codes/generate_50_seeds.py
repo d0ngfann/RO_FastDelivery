@@ -1,5 +1,5 @@
 """
-generate_50_seeds.py — Dataset Generator
+generate_50_seeds.py  -  Dataset Generator
 
 Generates 50 datasets (seeds 1-50) for a given instance type.
 Each .pkl file contains a SupplyChainData object with all parameters, coordinates,

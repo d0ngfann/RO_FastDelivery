@@ -1,5 +1,5 @@
 """
-run_linear_di.py — Linear DI Robustness Check: 2 functions x 4 DI x 10 seeds x 4 policies = 320 runs
+run_linear_di.py  -  Linear DI Robustness Check: 2 functions x 4 DI x 10 seeds x 4 policies = 320 runs
 
 Compares exponential DI (base sqrt(1.6)) vs linear DI (1 + 0.3*k*m).
 Both anchored to same endpoint: DI=1.60 at kappa=1, m=2.
